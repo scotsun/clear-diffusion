@@ -1,0 +1,5 @@
+dataset_params:
+    name: "mnist"
+
+vae_params:
+    num_heads: 16
