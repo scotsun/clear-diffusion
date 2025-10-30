@@ -69,10 +69,86 @@ class ResidualBlock(nn.Module):
 
 
 class Downsample(nn.Module):
-    def __init__(self, channels):
+    """(batch_size, channels, h, w) -> (batch_size, channels, h//2, w//2)"""
+
+    def __init__(self, channels: int):
         super().__init__()
         self.conv = nn.Conv2d(channels, channels, kernel_size=3, stride=2, padding=0)
 
     def forward(self, x):
         x = F.pad(x, (0, 1, 0, 1), value=0)
         return self.conv(x)
+
+
+class Upsample(nn.Module):
+    """(batch_size, channels, h, w) -> (batch_size, channels, h*2 , w*2)"""
+
+    def __init__(self, channels: int):
+        super().__init__()
+        self.conv = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+
+    def forward(self, x):
+        x = F.interpolate(x, scale_factor=2.0, mode="nearest")
+        return self.conv(x)
+
+
+def build_downblock(
+    in_channels: int,
+    out_channels: int,
+    n_resnet_blocks: int,
+    downsample: bool,
+    norm_channels: int,
+) -> nn.Module:
+    """
+    downblock = [(resnet_block + downsample)] * n - 1 + [(resnet_block)]
+    """
+    downblock = nn.Module()
+    resnet_blocks = nn.ModuleList()
+    for _ in range(n_resnet_blocks):
+        resnet_blocks.append(ResidualBlock(in_channels, out_channels, norm_channels))
+        in_channels = out_channels
+
+    downblock.resnet_blocks = resnet_blocks
+    if downsample:
+        downblock.downsample = Downsample(out_channels)
+    else:
+        downblock.downsample = nn.Identity()
+
+    return downblock
+
+
+def build_midblock(channels: int, norm_channels: int, n_heads: int) -> nn.Module:
+    """
+    midblock = (resnet_block, attention_block, resnet_block)
+    """
+    midblock = nn.Module()
+    midblock.resnet_block1 = ResidualBlock(channels, channels, norm_channels)
+    midblock.attention_block = AttentionBlock(channels, norm_channels, n_heads)
+    midblock.resnet_block2 = ResidualBlock(channels, channels, norm_channels)
+
+    return midblock
+
+
+def build_upblock(
+    in_channels: int,
+    out_channels: int,
+    n_resnet_blocks: int,
+    downsample: bool,
+    norm_channels: int,
+):
+    """
+    upblock = [(resnet_block + upsample)] * n - 1 + [(resnet_block)]
+    """
+    upblock = nn.Module()
+    resnet_blocks = nn.ModuleList()
+    for _ in range(n_resnet_blocks):
+        resnet_blocks.append(ResidualBlock(in_channels, out_channels, norm_channels))
+        in_channels = out_channels
+
+    upblock.resnet_blocks = resnet_blocks
+    if downsample:
+        upblock.upsample = Upsample(out_channels)
+    else:
+        upblock.upsample = nn.Identity()
+
+    return upblock
