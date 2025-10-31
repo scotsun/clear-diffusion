@@ -18,8 +18,8 @@ class IsotropicNormalDistribution:
 
     def sample(self):
         std = (0.5 * self.logvar).exp()
-        x = self.mu + std * torch.randn_like(self.mu).to(device=self.mu.device)
-        return x
+        z = self.mu + std * torch.randn_like(self.mu).to(device=self.mu.device)
+        return z
 
     def kl(self, other=None):
         if self.deterministic:

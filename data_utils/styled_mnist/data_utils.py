@@ -7,7 +7,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-import src.corruptions as corruptions
+from . import corruptions
 
 
 def random_style_distribution(
@@ -70,8 +70,8 @@ class StyledMNIST(Dataset):
     def __getitem__(self, idx) -> tuple:
         img, label, style = self.dataset[idx]
         img = self.transform(img)
-        return img, label, style
+        return {"image": img, "label": label, "style": style}
 
     def display(self, idx):
-        img, _, _ = self.__getitem__(idx)
+        img = self.__getitem__(idx)["image"]
         return transforms.ToPILImage()(img)
