@@ -3,7 +3,6 @@ import torch.nn as nn
 import mlflow
 
 from abc import ABC, abstractmethod
-from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from mlflow.models import ModelSignature
 
@@ -42,21 +41,21 @@ class Trainer(ABC):
     def __init__(
         self,
         model: nn.Module,
-        optimizer: Optimizer,
         early_stopping: EarlyStopping | None,
         verbose_period: int,
         device: torch.device,
         model_signature: ModelSignature,
+        args: dict,
         transform=None,
     ) -> None:
-        self.model = model
-        self.optimizer = optimizer
+        self.model = model.to(device)
         self.early_stopping = early_stopping
         self.verbose_period = verbose_period
         self.device = device
         self.model_signature = model_signature
         self.transform = transform
         self.model_state = model.state_dict().copy()
+        self.args = args
 
     def _stage_model_state(self):
         self.best_model_state = self.model.state_dict().copy()
@@ -72,6 +71,10 @@ class Trainer(ABC):
             signature=self.model_signature,
         )
         print("[INFO]: log best model")
+
+    @abstractmethod
+    def _configure_opts(self, args: dict):
+        return dict()
 
     def fit(
         self,

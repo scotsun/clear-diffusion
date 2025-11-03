@@ -3,10 +3,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def d_hinge_loss(real_logits, fake_logits):
+    return F.relu(1 - real_logits).mean() + F.relu(1 + fake_logits).mean()
+
+
+def g_hinge_loss(fake_logits):
+    return -fake_logits.mean()
+
+
 def pairwise_cosine(z: torch.Tensor):
-    # z: (batch_size, z_channel, height, width)
-    z = z.view(z.shape[0], -1)
-    return F.cosine_similarity(z[:, None, :], z[None, :, :], dim=-1)
+    # z: (batch_size, z_channel, h_fea, w_fea)
+    z_gap = nn.AdaptiveAvgPool2d(output_size=1)(z).squeeze()
+    return F.cosine_similarity(z_gap[:, None, :], z_gap[None, :, :], dim=-1)
 
 
 class SupCon(nn.Module):

@@ -1,14 +1,15 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.optim as optim
 import mlflow
 
-from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from mlflow.models import ModelSignature
 
 from sd_vae.ae import VAE
+from modules.loss import d_hinge_loss, g_hinge_loss
 from . import EarlyStopping, Trainer
 
 
@@ -16,60 +17,103 @@ class VAEFirstStageTrainer(Trainer):
     def __init__(
         self,
         model: nn.Module,
-        optimizer: Optimizer,
+        discriminator: nn.Module | None,
         early_stopping: EarlyStopping | None,
         verbose_period: int,
         device: torch.device,
         model_signature: ModelSignature,
-        hyperparams: dict,
+        args: dict,
         transform=None,
     ) -> None:
         super().__init__(
             model,
-            optimizer,
             early_stopping,
             verbose_period,
             device,
             model_signature,
+            args,
             transform,
         )
-        self.hyperparams = hyperparams
+        # TODO: add lpips
+        self.discriminator = discriminator.to(device) if discriminator else None
+        self.opts = self._configure_opts(args)
+
+    def _configure_opts(self, args: dict):
+        vae_opt = optim.Adam(self.model.parameters(), lr=args["vae_lr"])
+        if self.discriminator:
+            disc_opt = optim.Adam(self.discriminator.parameters(), lr=args["disc_lr"])
+        return (
+            {"vae_opt": vae_opt, "disc_opt": disc_opt}
+            if self.discriminator
+            else {"vae_opt": vae_opt}
+        )
+
+    def disc_factor(self, cur_step: int):
+        return 1 if cur_step < self.args["disc_warmup"] else self.args["disc_factor"]
 
     def _train(self, dataloader: DataLoader, verbose: bool, epoch_id: int):
+        has_disc = self.discriminator is not None
+
         vae: VAE = self.model
         vae.train()
-        opt = self.optimizer
+        vae_opt = self.opts["vae_opt"]
+        if has_disc:
+            disc_opt = self.opts["disc_opt"]
         device = self.device
 
         with tqdm(dataloader, unit="batch", mininterval=0, disable=not verbose) as bar:
             bar.set_description(f"Epoch {epoch_id}")
+
             for batch_id, batch in enumerate(bar):
+                cur_step = epoch_id * len(dataloader) + batch_id
                 x = batch["image"].to(device)
                 if self.transform:
                     x = self.transform(x)
-                opt.zero_grad()
+                vae_opt.zero_grad()
                 xhat, posterior = vae(x)
-                rec_loss = F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3))
-                kl_loss = posterior.kl()
 
-                loss = rec_loss.mean() + kl_loss.mean()
-                loss.backward()
-                opt.step()
-
-                bar.set_postfix(
-                    rec_loss=rec_loss.mean().item(),
-                    kl_loss=kl_loss.mean().item(),
+                rec_loss = (
+                    F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3)).mean()
                 )
+                kl_loss = posterior.kl().mean()
+                loss = rec_loss + kl_loss
 
-                cur_step = epoch_id * len(dataloader) + batch_id
-                if cur_step % 10 == 0:
-                    mlflow.log_metrics(
+                metrics = {
+                    "rec_loss": rec_loss.item(),
+                    "kl_loss": kl_loss.item(),
+                }
+
+                # disc forward pass
+                if has_disc:
+                    disc_factor = self.disc_factor(cur_step)
+                    disc_opt.zero_grad()
+                    disc_real = self.discriminator(x)
+                    # no gradient path from D → G.
+                    disc_fake = self.discriminator(xhat.detach())
+
+                    g_loss = g_hinge_loss(disc_fake)
+                    d_loss = disc_factor * d_hinge_loss(disc_real, disc_fake.detach())
+                    l_weight = self.adaptive_l()
+                    loss += disc_factor * l_weight * g_loss
+                    metrics.update(
                         {
-                            "rec_loss": rec_loss.mean().item(),
-                            "kl_loss": kl_loss.mean().item(),
-                        },
-                        step=cur_step,
+                            "g_loss": g_loss.item(),
+                            "d_loss": d_loss.item(),
+                        }
                     )
+                if has_disc:
+                    loss.backward()
+                else:
+                    loss.backward()
+                vae_opt.step()
+                if has_disc:
+                    d_loss.backward()
+                    disc_opt.step()
+
+                # update progress bar
+                bar.set_postfix(metrics)
+                if cur_step % 10 == 0:
+                    mlflow.log_metrics(metrics, step=cur_step)
         return
 
     def evaluate(self, dataloader: DataLoader, verbose: bool):
@@ -86,7 +130,9 @@ class VAEFirstStageTrainer(Trainer):
                 if self.transform:
                     x = self.transform(x)
                 xhat, posterior = vae(x)
-                rec_loss = F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3))
+                rec_loss = (
+                    F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3)).mean()
+                )
                 kl_loss = posterior.kl()
 
                 total_rec_loss += rec_loss.mean().item()
@@ -115,34 +161,38 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
         self,
         contrastive_criterion: nn.Module,
         model: nn.Module,
-        optimizer: Optimizer,
         early_stopping: EarlyStopping | None,
         verbose_period: int,
         device: torch.device,
         model_signature: ModelSignature,
-        hyperparams: dict,
+        args: dict,
         transform=None,
     ) -> None:
         super().__init__(
             model,
-            optimizer,
             early_stopping,
             verbose_period,
             device,
             model_signature,
+            args,
             transform,
         )
+        self.opts = self._configure_opts(args)
         self.contrastive_criterion = contrastive_criterion
-        self.hyperparams = hyperparams
+        self.args = args
+
+    def _configure_opts(self, args: dict):
+        vae_opt = optim.Adam(self.model.parameters(), lr=args["vae_lr"])
+        return {"vae_opt": vae_opt}
 
     def _train(self, dataloader: DataLoader, verbose: bool, epoch_id: int):
         vae: VAE = self.model
         vae.train()
-        opt = self.optimizer
+        opt = self.opts["vae_opt"]
         device = self.device
 
-        beta = self.hyperparams["beta"]
-        gamma = self.hyperparams["gamma"]
+        beta = self.args["beta"]
+        gamma = self.args["gamma"]
 
         with tqdm(dataloader, unit="batch", mininterval=0, disable=not verbose) as bar:
             bar.set_description(f"Epoch {epoch_id}")
@@ -152,7 +202,9 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
                     x = self.transform(x)
                 opt.zero_grad()
                 xhat, posterior = vae(x)
-                z_c, z_s = posterior.sample().chunk(2, dim=1)
+                z_c, z_s = posterior.sample().chunk(
+                    2, dim=1
+                )  # (batch, z_channel, h_fea, w_fea)
 
                 rec_loss = F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3))
                 kl_loss = posterior.kl()
