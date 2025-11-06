@@ -6,7 +6,7 @@ import torch.nn as nn
 
 
 class Discriminator(nn.Module):
-    def __init__(self, in_channels, num_filters_last=64, n_layers=3):
+    def __init__(self, in_channels: int, num_filters_last: int = 64, n_layers: int = 3):
         super().__init__()
         layers = [
             nn.Conv2d(
@@ -28,7 +28,7 @@ class Discriminator(nn.Module):
                     bias=False,
                 ),
                 nn.BatchNorm2d(num_filters_last * num_filters_mult),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.LeakyReLU(0.2),
             ]
         layers += [
             nn.Conv2d(
@@ -44,14 +44,19 @@ class Discriminator(nn.Module):
     def forward(self, x):
         return self.model(x)
 
-    # TODO: add weight init
+    def weight_init(self, m):
+        if isinstance(m, nn.Conv2d):
+            nn.init.normal_(m.weight, 0.0, 0.02)
+        elif isinstance(m, nn.BatchNorm2d):
+            nn.init.normal_(m.weight, 1.0, 0.02)
+            nn.init.constant_(m.bias, 0)
 
 
 if __name__ == "__main__":
     import torch
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    disc = Discriminator(3, n_layers=0).to(device)
+    disc = Discriminator(1, n_layers=0).to(device)
 
     print(disc)
 
@@ -60,5 +65,5 @@ if __name__ == "__main__":
     # (256, 256): n_layers=3
     # (512, 512): n_layers=4
 
-    x = torch.randn(1, 3, 32, 32).to(device)
+    x = torch.randn(1, 1, 32, 32).to(device)
     print(disc(x).shape)

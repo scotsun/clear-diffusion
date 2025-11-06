@@ -16,7 +16,7 @@ from . import EarlyStopping, Trainer
 class VAEFirstStageTrainer(Trainer):
     def __init__(
         self,
-        model: nn.Module,
+        model: VAE,
         discriminator: nn.Module | None,
         early_stopping: EarlyStopping | None,
         verbose_period: int,
@@ -36,20 +36,39 @@ class VAEFirstStageTrainer(Trainer):
         )
         # TODO: add lpips
         self.discriminator = discriminator.to(device) if discriminator else None
+        if self.discriminator:
+            self.discriminator.apply(self.discriminator.weight_init)
+            self.logvar = nn.Parameter(torch.zeros(size=()))
         self.opts = self._configure_opts(args)
 
     def _configure_opts(self, args: dict):
-        vae_opt = optim.Adam(self.model.parameters(), lr=args["vae_lr"])
-        if self.discriminator:
+        if self.discriminator is None:
+            vae_opt = optim.Adam(self.model.parameters(), lr=args["vae_lr"])
+            return {"vae_opt": vae_opt}
+        else:
+            vae_opt = optim.Adam(
+                list(self.model.parameters()) + [self.logvar], lr=args["vae_lr"]
+            )
             disc_opt = optim.Adam(self.discriminator.parameters(), lr=args["disc_lr"])
-        return (
-            {"vae_opt": vae_opt, "disc_opt": disc_opt}
-            if self.discriminator
-            else {"vae_opt": vae_opt}
-        )
+            return (
+                {"vae_opt": vae_opt, "disc_opt": disc_opt}
+                if self.discriminator
+                else {"vae_opt": vae_opt}
+            )
 
     def disc_factor(self, cur_step: int):
-        return 1 if cur_step < self.args["disc_warmup"] else self.args["disc_factor"]
+        return 1 if cur_step >= self.args["disc_warmup"] else 0
+
+    def adaptive_d_weight(self, rec_loss, g_loss):
+        last_layer = self.model.decoder.conv_out.weight
+        nll_loss = (
+            rec_loss / self.logvar.exp() + self.logvar
+        )  # update to factor of 2 and additive constant
+        nll_grad = torch.autograd.grad(nll_loss, last_layer, retain_graph=True)[0]
+        g_grad = torch.autograd.grad(g_loss, last_layer, retain_graph=True)[0]
+        d_weight = torch.norm(nll_grad) / (torch.norm(g_grad) + 1e-8)
+        d_weight = torch.clamp(d_weight, 0.0, 1e4).detach()
+        return d_weight
 
     def _train(self, dataloader: DataLoader, verbose: bool, epoch_id: int):
         has_disc = self.discriminator is not None
@@ -61,6 +80,8 @@ class VAEFirstStageTrainer(Trainer):
             disc_opt = self.opts["disc_opt"]
         device = self.device
 
+        beta = self.args["beta"]
+
         with tqdm(dataloader, unit="batch", mininterval=0, disable=not verbose) as bar:
             bar.set_description(f"Epoch {epoch_id}")
 
@@ -69,44 +90,38 @@ class VAEFirstStageTrainer(Trainer):
                 x = batch["image"].to(device)
                 if self.transform:
                     x = self.transform(x)
-                vae_opt.zero_grad()
                 xhat, posterior = vae(x)
 
                 rec_loss = (
                     F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3)).mean()
                 )
                 kl_loss = posterior.kl().mean()
-                loss = rec_loss + kl_loss
-
+                loss = rec_loss + beta * kl_loss
                 metrics = {
                     "rec_loss": rec_loss.item(),
                     "kl_loss": kl_loss.item(),
                 }
-
-                # disc forward pass
                 if has_disc:
                     disc_factor = self.disc_factor(cur_step)
-                    disc_opt.zero_grad()
-                    disc_real = self.discriminator(x)
-                    # no gradient path from D → G.
-                    disc_fake = self.discriminator(xhat.detach())
+                    g_loss = g_hinge_loss(fake_logits=self.discriminator(xhat))
 
-                    g_loss = g_hinge_loss(disc_fake)
-                    d_loss = disc_factor * d_hinge_loss(disc_real, disc_fake.detach())
-                    l_weight = self.adaptive_l()
-                    loss += disc_factor * l_weight * g_loss
+                    d_weight = self.adaptive_d_weight(rec_loss, g_loss)
+                    loss = loss + disc_factor * d_weight * g_loss
                     metrics.update(
-                        {
-                            "g_loss": g_loss.item(),
-                            "d_loss": d_loss.item(),
-                        }
+                        {"g_loss": g_loss.item(), "d_weight": d_weight.item()}
                     )
-                if has_disc:
-                    loss.backward()
-                else:
-                    loss.backward()
+
+                vae_opt.zero_grad()
+                loss.backward()
                 vae_opt.step()
+
                 if has_disc:
+                    d_loss = disc_factor * d_hinge_loss(
+                        real_logits=self.discriminator(x),
+                        fake_logits=self.discriminator(xhat.detach()),
+                    )  # no gradient path from D → G.
+                    metrics.update({"d_loss": d_loss.item()})
+                    disc_opt.zero_grad()
                     d_loss.backward()
                     disc_opt.step()
 
@@ -177,12 +192,16 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
             args,
             transform,
         )
+        self.contrastive_criterion = contrastive_criterion.to(device)
         self.opts = self._configure_opts(args)
-        self.contrastive_criterion = contrastive_criterion
         self.args = args
 
     def _configure_opts(self, args: dict):
-        vae_opt = optim.Adam(self.model.parameters(), lr=args["vae_lr"])
+        vae_opt = optim.Adam(
+            list(self.model.parameters())
+            + list(self.contrastive_criterion.parameters()),
+            lr=args["vae_lr"],
+        )
         return {"vae_opt": vae_opt}
 
     def _train(self, dataloader: DataLoader, verbose: bool, epoch_id: int):
@@ -204,7 +223,7 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
                 xhat, posterior = vae(x)
                 z_c, z_s = posterior.sample().chunk(
                     2, dim=1
-                )  # (batch, z_channel, h_fea, w_fea)
+                )  # (batch, z_channel, h_feature, w_feature)
 
                 rec_loss = F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3))
                 kl_loss = posterior.kl()
