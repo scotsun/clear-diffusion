@@ -13,8 +13,8 @@ def g_hinge_loss(fake_logits):
 
 def pairwise_cosine(z: torch.Tensor):
     # z: (batch_size, z_channel, h_fea, w_fea)
-    # z_gap = nn.AdaptiveAvgPool2d(output_size=1)(z).squeeze()
-    z = z.view(z.shape[0], -1)
+    z = nn.AdaptiveAvgPool2d(output_size=1)(z).squeeze()
+    # z = z.view(z.shape[0], -1)
     return F.cosine_similarity(z[:, None, :], z[None, :, :], dim=-1)
 
 

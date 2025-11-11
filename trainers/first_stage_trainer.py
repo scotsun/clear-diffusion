@@ -174,7 +174,7 @@ class VAEFirstStageTrainer(Trainer):
 class CLEAR_VAEFirstStageTrainer(Trainer):
     def __init__(
         self,
-        contrastive_criterion: nn.Module,
+        contrastive_criterions: dict[str, nn.Module],
         model: nn.Module,
         early_stopping: EarlyStopping | None,
         verbose_period: int,
@@ -192,14 +192,15 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
             args,
             transform,
         )
-        self.contrastive_criterion = contrastive_criterion.to(device)
+        self.contrastive_criterions = contrastive_criterions
         self.opts = self._configure_opts(args)
         self.args = args
 
     def _configure_opts(self, args: dict):
         vae_opt = optim.Adam(
             list(self.model.parameters())
-            + list(self.contrastive_criterion.parameters()),
+            + list(self.contrastive_criterions["content"].parameters())
+            + list(self.contrastive_criterions["style"].parameters()),
             lr=args["vae_lr"],
         )
         return {"vae_opt": vae_opt}
@@ -227,8 +228,8 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
 
                 rec_loss = F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3))
                 kl_loss = posterior.kl()
-                con_loss = self.contrastive_criterion(z_c, y)
-                ps_loss = self.contrastive_criterion(z_s, y, ps=True)
+                con_loss = self.contrastive_criterions["content"](z_c, y)
+                ps_loss = self.contrastive_criterions["style"](z_s, y, ps=True)
                 ps_loss = ps_loss.mean()
 
                 loss = (
@@ -278,8 +279,8 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
 
                 rec_loss = F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3))
                 kl_loss = posterior.kl()
-                con_loss = self.contrastive_criterion(z_c, y)
-                ps_loss = self.contrastive_criterion(z_s, y, ps=True)
+                con_loss = self.contrastive_criterions["content"](z_c, y)
+                ps_loss = self.contrastive_criterions["style"](z_s, y, ps=True)
 
                 losses[0] += rec_loss.mean().item()
                 losses[1] += kl_loss.mean().item()
