@@ -11,6 +11,11 @@ def g_hinge_loss(fake_logits):
     return -fake_logits.mean()
 
 
+def pairwise_cosine(z: torch.Tensor):
+    # z: (batch_size, z_channel, h_fea, w_fea)
+    return F.cosine_similarity(z[:, None, :], z[None, :, :], dim=-1)
+
+
 @torch.jit.script
 def logsumexp(inputs: torch.Tensor, dim: int = -1):
     # cite: https://github.com/pytorch/pytorch/issues/31829
@@ -21,15 +26,41 @@ def logsumexp(inputs: torch.Tensor, dim: int = -1):
 
 
 class SupCon(nn.Module):
-    def __init__(self, temperature, learnable_temp=False):
+    def __init__(
+        self,
+        temperature,
+        learnable_temp=False,
+        pool: str = "gap",
+        use_proj: bool = False,
+    ):
         super().__init__()
         self.temperature = temperature
         if learnable_temp:
-            self.temperature = nn.Parameter(torch.tensor(temperature))
+            self.temperature = nn.Parameter(torch.tensor(temperature).exp())
+        self.pool = pool
+        self.use_proj = use_proj
+        if self.use_proj:
+            self.proj = nn.Sequential(
+                nn.LazyLinear(128),
+                nn.ReLU(),
+                nn.LazyLinear(128),
+            )
+
+    def _proj(self, z: torch.Tensor):
+        if self.pool == "gap":
+            z = nn.AdaptiveAvgPool2d(output_size=1)(z).squeeze()
+        elif self.pool == "flatten":
+            z = z.flatten(start_dim=1)
+
+        if self.use_proj:
+            z = self.proj(z)
+
+        return z
 
     def forward(self, z: torch.Tensor, y: torch.Tensor, ps: bool = False):
         n = z.size(0)
         device = z.device
+        z = self._proj(z)
 
         z = nn.AdaptiveAvgPool2d(output_size=1)(z).squeeze()  # gap
         z = F.normalize(z, dim=-1)
@@ -45,15 +76,56 @@ class SupCon(nn.Module):
         else:
             p = (y[None, :] == y[:, None]).float()
         p = torch.where(eye, torch.zeros_like(p), p)
-        p = p / p.sum(dim=-1, keepdim=True).clamp_min(1)  # avoid divide-by-zero
+        p /= p.sum(dim=-1, keepdim=True).clamp_min(1)  # avoid divide-by-zero
 
         loss = -(p * log_q).sum(dim=-1)
         return loss
 
 
-class DenseSupCon(SupCon):
-    def __init__(self, temperature, learnable_temp=False):
-        super().__init__(temperature, learnable_temp)
+class SNN(SupCon):
+    def __init__(
+        self,
+        temperature,
+        learnable_temp=False,
+        pool: str = "gap",
+        use_proj: bool = False,
+    ):
+        super().__init__(temperature, learnable_temp, pool, use_proj)
+
+    def forward(self, z: torch.Tensor, y: torch.Tensor, ps: bool = False):
+        n = z.size(0)
+        device = z.device
+        z = self._proj(z)
+
+        z = nn.AdaptiveAvgPool2d(output_size=1)(z).squeeze()  # gap
+        z = F.normalize(z, dim=-1)
+        sim = torch.einsum("nc,mc->nm", z, z) / self.temperature
+        eye = torch.eye(n, dtype=torch.bool, device=device)
+        sim = sim.masked_fill(eye, float("-inf"))
+
+        if ps:
+            p = (y[None, :] != y[:, None]).float()
+        else:
+            p = (y[None, :] == y[:, None]).float()
+
+        unselect = p == 0
+        select_sim = p * sim
+        select_sim = select_sim.masked_fill(unselect, float("-inf"))
+        loss = -logsumexp(inputs=select_sim / self.temperature, dim=1) + logsumexp(
+            inputs=sim / self.temperature, dim=1
+        )
+        return loss[torch.isfinite(loss)]
+
+
+class DenseSupCon(nn.Module):
+    def __init__(self, temperature, learnable_temp=False, use_proj: bool = False):
+        super().__init__()
+        self.temperature = temperature
+        if learnable_temp:
+            self.temperature = nn.Parameter(torch.tensor(temperature))
+        self.use_proj = use_proj
+        if self.use_proj:
+            raise ValueError("TODO! have not implemented yet")
 
     def forward(self, z: torch.Tensor, y: torch.Tensor, ps: bool = False):
         b, c, w_f, h_f = z.shape
@@ -107,37 +179,6 @@ class DenseSupCon(SupCon):
 
         loss = -(p * log_q).sum(dim=-1)
         return loss
-
-
-class SNN(nn.Module):
-    def __init__(self, temperature, learnable_temp=False):
-        super().__init__()
-        self.temperature = temperature
-        if learnable_temp:
-            self.temperature = nn.Parameter(torch.tensor(temperature))
-
-    def forward(self, z: torch.Tensor, y: torch.Tensor, ps: bool = False):
-        n = z.size(0)
-        device = z.device
-
-        z = nn.AdaptiveAvgPool2d(output_size=1)(z).squeeze()  # gap
-        z = F.normalize(z, dim=-1)
-        sim = torch.einsum("nc,mc->nm", z, z) / self.temperature
-        eye = torch.eye(n, dtype=torch.bool, device=device)
-        sim = sim.masked_fill(eye, float("-inf"))
-
-        if ps:
-            p = (y[None, :] != y[:, None]).float()
-        else:
-            p = (y[None, :] == y[:, None]).float()
-
-        unselect = p == 0
-        select_sim = p * sim
-        select_sim = select_sim.masked_fill(unselect, float("-inf"))
-        loss = -logsumexp(inputs=select_sim / self.temperature, dim=1) + logsumexp(
-            inputs=sim / self.temperature, dim=1
-        )
-        return loss.mean()
 
 
 if __name__ == "__main__":

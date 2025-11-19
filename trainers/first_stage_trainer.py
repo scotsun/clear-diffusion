@@ -223,7 +223,6 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
                     x = self.transform(x)
                 opt.zero_grad()
                 xhat, posterior = vae(x)
-                # (batch, z_channel, h_feature, w_feature)
                 z_c, z_s = posterior.sample().split_with_sizes(channel_split, dim=1)
 
                 rec_loss = F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3))
@@ -249,7 +248,7 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
                 )
 
                 cur_step = epoch_id * len(dataloader) + batch_id
-                if cur_step % 10 == 0:
+                if cur_step % 50 == 0:
                     mlflow.log_metrics(
                         {
                             "rec_loss": rec_loss.mean().item(),
