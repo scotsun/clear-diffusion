@@ -211,6 +211,7 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
         opt = self.opts["vae_opt"]
         device = self.device
 
+        channel_split = self.args["channel_split"]
         beta = self.args["beta"]
         gamma = self.args["gamma"]
 
@@ -222,9 +223,7 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
                     x = self.transform(x)
                 opt.zero_grad()
                 xhat, posterior = vae(x)
-                z_c, z_s = posterior.sample().chunk(
-                    2, dim=1
-                )  # (batch, z_channel, h_feature, w_feature)
+                z_c, z_s = posterior.sample().split_with_sizes(channel_split, dim=1)
 
                 rec_loss = F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3))
                 kl_loss = posterior.kl()
@@ -249,7 +248,7 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
                 )
 
                 cur_step = epoch_id * len(dataloader) + batch_id
-                if cur_step % 10 == 0:
+                if cur_step % 50 == 0:
                     mlflow.log_metrics(
                         {
                             "rec_loss": rec_loss.mean().item(),
@@ -265,6 +264,7 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
         vae: VAE = self.model
         vae.eval()
         device = self.device
+        channel_split = self.args["channel_split"]
 
         losses = torch.zeros(4)
         with torch.no_grad():
@@ -275,7 +275,7 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
                 if self.transform:
                     x = self.transform(x)
                 xhat, posterior = vae(x)
-                z_c, z_s = posterior.sample().chunk(2, dim=1)
+                z_c, z_s = posterior.sample().split_with_sizes(channel_split, dim=1)
 
                 rec_loss = F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3))
                 kl_loss = posterior.kl()
