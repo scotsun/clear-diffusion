@@ -62,7 +62,9 @@ class SupCon(nn.Module):
         device = z.device
         z = self._proj(z)
 
-        sim = pairwise_cosine(z) / self.temperature
+        z = nn.AdaptiveAvgPool2d(output_size=1)(z).squeeze()  # gap
+        z = F.normalize(z, dim=-1)
+        sim = torch.einsum("nc,mc->nm", z, z) / self.temperature
         eye = torch.eye(n, dtype=torch.bool, device=device)
         sim = sim.masked_fill(eye, float("-inf"))
 
@@ -95,7 +97,9 @@ class SNN(SupCon):
         device = z.device
         z = self._proj(z)
 
-        sim = pairwise_cosine(z)
+        z = nn.AdaptiveAvgPool2d(output_size=1)(z).squeeze()  # gap
+        z = F.normalize(z, dim=-1)
+        sim = torch.einsum("nc,mc->nm", z, z) / self.temperature
         eye = torch.eye(n, dtype=torch.bool, device=device)
         sim = sim.masked_fill(eye, float("-inf"))
 
@@ -106,7 +110,7 @@ class SNN(SupCon):
 
         unselect = p == 0
         select_sim = p * sim
-        select_sim = select_sim.masked_fill_(unselect, float("-inf"))
+        select_sim = select_sim.masked_fill(unselect, float("-inf"))
         loss = -logsumexp(inputs=select_sim / self.temperature, dim=1) + logsumexp(
             inputs=sim / self.temperature, dim=1
         )
