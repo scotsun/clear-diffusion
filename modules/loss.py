@@ -28,15 +28,15 @@ def logsumexp(inputs: torch.Tensor, dim: int = -1):
 class SupCon(nn.Module):
     def __init__(
         self,
-        temperature,
+        temperature: float,
         learnable_temp=False,
         pool: str = "gap",
         use_proj: bool = False,
     ):
         super().__init__()
-        self.temperature = temperature
+        self.log_tau = torch.tensor(temperature).log()
         if learnable_temp:
-            self.temperature = nn.Parameter(torch.tensor(temperature).exp())
+            self.log_tau = nn.Parameter(torch.tensor(temperature).log())
         self.pool = pool
         self.use_proj = use_proj
         if self.use_proj:
@@ -62,9 +62,8 @@ class SupCon(nn.Module):
         device = z.device
         z = self._proj(z)
 
-        z = nn.AdaptiveAvgPool2d(output_size=1)(z).squeeze()  # gap
         z = F.normalize(z, dim=-1)
-        sim = torch.einsum("nc,mc->nm", z, z) / self.temperature
+        sim = torch.einsum("nc,mc->nm", z, z) / self.log_tau.exp()
         eye = torch.eye(n, dtype=torch.bool, device=device)
         sim = sim.masked_fill(eye, float("-inf"))
 
@@ -85,7 +84,7 @@ class SupCon(nn.Module):
 class SNN(SupCon):
     def __init__(
         self,
-        temperature,
+        temperature: float,
         learnable_temp=False,
         pool: str = "gap",
         use_proj: bool = False,
@@ -97,9 +96,8 @@ class SNN(SupCon):
         device = z.device
         z = self._proj(z)
 
-        z = nn.AdaptiveAvgPool2d(output_size=1)(z).squeeze()  # gap
         z = F.normalize(z, dim=-1)
-        sim = torch.einsum("nc,mc->nm", z, z) / self.temperature
+        sim = torch.einsum("nc,mc->nm", z, z) / self.log_tau.exp()
         eye = torch.eye(n, dtype=torch.bool, device=device)
         sim = sim.masked_fill(eye, float("-inf"))
 
@@ -111,9 +109,7 @@ class SNN(SupCon):
         unselect = p == 0
         select_sim = p * sim
         select_sim = select_sim.masked_fill(unselect, float("-inf"))
-        loss = -logsumexp(inputs=select_sim / self.temperature, dim=1) + logsumexp(
-            inputs=sim / self.temperature, dim=1
-        )
+        loss = -logsumexp(inputs=select_sim, dim=1) + logsumexp(inputs=sim, dim=1)
         return loss[torch.isfinite(loss)]
 
 

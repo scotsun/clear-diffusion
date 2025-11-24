@@ -10,6 +10,7 @@ from mlflow.models import ModelSignature
 
 from sd_vae.ae import VAE
 from modules.loss import d_hinge_loss, g_hinge_loss
+from modules.loss import SupCon, SNN, DenseSupCon  # noqa
 from . import EarlyStopping, Trainer
 
 
@@ -174,7 +175,6 @@ class VAEFirstStageTrainer(Trainer):
 class CLEAR_VAEFirstStageTrainer(Trainer):
     def __init__(
         self,
-        contrastive_criterions: dict[str, nn.Module],
         model: nn.Module,
         early_stopping: EarlyStopping | None,
         verbose_period: int,
@@ -192,18 +192,55 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
             args,
             transform,
         )
-        self.contrastive_criterions = contrastive_criterions
-        self.opts = self._configure_opts(args)
+        self._configure_contrastive_criterion(args)
+        self._configure_opts(args)
         self.args = args
 
+    def _configure_contrastive_criterion(self, args: dict):
+        args = args["contrastive_module"]
+        contrastive_criterions = {
+            "global": {
+                "content": eval(f"{args['contrastive_method']}")(
+                    temperature=args["temperature"][0],
+                    learnable_temp=args["learnable_temp"],
+                    pool=args["pool"],
+                    use_proj=args["use_proj"],
+                ).to(self.device),
+                "style": eval(f"{args['contrastive_method']}")(
+                    temperature=args["temperature"][1],
+                    learnable_temp=args["learnable_temp"],
+                    pool=args["pool"],
+                    use_proj=args["use_proj"],
+                ).to(self.device),
+            }
+        }
+        if args.get("use_dense"):
+            contrastive_criterions["dense"] = {
+                # "content": eval(f"Dense{args['contrastive_method']}")(
+                "content": DenseSupCon(
+                    args["temperature"][0],
+                    args["learnable_temp"],
+                ).to(self.device),
+                "style": DenseSupCon(
+                    args["temperature"][1],
+                    args["learnable_temp"],
+                ).to(self.device),
+            }
+        self.contrastive_criterions = contrastive_criterions
+
     def _configure_opts(self, args: dict):
-        vae_opt = optim.Adam(
+        param_list = (
             list(self.model.parameters())
-            + list(self.contrastive_criterions["content"].parameters())
-            + list(self.contrastive_criterions["style"].parameters()),
-            lr=args["vae_lr"],
+            + list(self.contrastive_criterions["global"]["content"].parameters())
+            + list(self.contrastive_criterions["global"]["style"].parameters())
         )
-        return {"vae_opt": vae_opt}
+        if "dense" in self.contrastive_criterions:
+            param_list += list(
+                self.contrastive_criterions["dense"]["content"].parameters()
+            ) + list(self.contrastive_criterions["dense"]["style"].parameters())
+
+        vae_opt = optim.Adam(param_list, lr=args["vae_lr"])
+        self.opts = {"vae_opt": vae_opt}
 
     def _train(self, dataloader: DataLoader, verbose: bool, epoch_id: int):
         vae: VAE = self.model
@@ -225,36 +262,57 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
                 xhat, posterior = vae(x)
                 z_c, z_s = posterior.sample().split_with_sizes(channel_split, dim=1)
 
-                rec_loss = F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3))
-                kl_loss = posterior.kl()
-                con_loss = self.contrastive_criterions["content"](z_c, y)
-                ps_loss = self.contrastive_criterions["style"](z_s, y, ps=True)
-                ps_loss = ps_loss.mean()
-
-                loss = (
-                    rec_loss.mean()
-                    + beta * kl_loss.mean()
-                    + gamma * con_loss.mean()
-                    + gamma * ps_loss.mean()
+                rec_loss = (
+                    F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3)).mean()
                 )
+                kl_loss = posterior.kl().mean()
+                con_loss = self.contrastive_criterions["global"]["content"](
+                    z_c, y
+                ).mean()
+                ps_loss = self.contrastive_criterions["global"]["style"](
+                    z_s, y, ps=True
+                ).mean()
+
+                if "dense" in self.contrastive_criterions:
+                    dense_con_loss = self.contrastive_criterions["dense"]["content"](
+                        z_c, y
+                    ).mean()
+                    dense_ps_loss = self.contrastive_criterions["dense"]["style"](
+                        z_s, y, ps=True
+                    ).mean()
+                    loss = loss = (
+                        rec_loss
+                        + beta * kl_loss
+                        + gamma * (0.5 * con_loss + 0.5 * dense_con_loss)
+                        + gamma * (0.5 * ps_loss + 0.5 * dense_ps_loss)
+                    )
+                else:
+                    dense_con_loss = torch.tensor(0.0, device=device)
+                    dense_ps_loss = torch.tensor(0.0, device=device)
+                    loss = rec_loss + beta * kl_loss + gamma * con_loss + 0 * ps_loss
+
                 loss.backward()
                 opt.step()
 
                 bar.set_postfix(
-                    rec_loss=rec_loss.mean().item(),
-                    kl_loss=kl_loss.mean().item(),
-                    con_loss=con_loss.mean().item(),
-                    ps_loss=ps_loss.mean().item(),
+                    rec_loss=rec_loss.item(),
+                    kl_loss=kl_loss.item(),
+                    con_loss=con_loss.item(),
+                    ps_loss=ps_loss.item(),
+                    dense_con_loss=dense_con_loss.item(),
+                    dense_ps_loss=dense_ps_loss.item(),
                 )
 
                 cur_step = epoch_id * len(dataloader) + batch_id
                 if cur_step % 50 == 0:
                     mlflow.log_metrics(
                         {
-                            "rec_loss": rec_loss.mean().item(),
-                            "kl_loss": kl_loss.mean().item(),
-                            "con_loss": con_loss.mean().item(),
-                            "ps_loss": ps_loss.mean().item(),
+                            "rec_loss": rec_loss.item(),
+                            "kl_loss": kl_loss.item(),
+                            "con_loss": con_loss.item(),
+                            "ps_loss": ps_loss.item(),
+                            "dense_con_loss": dense_con_loss.item(),
+                            "dense_ps_loss": dense_ps_loss.item(),
                         },
                         step=cur_step,
                     )
@@ -266,7 +324,14 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
         device = self.device
         channel_split = self.args["channel_split"]
 
-        losses = torch.zeros(4)
+        losses = {
+            "rec_loss": 0.0,
+            "kl_loss": 0.0,
+            "con_loss": 0.0,
+            "ps_loss": 0.0,
+            "dense_con_loss": 0.0,
+            "dense_ps_loss": 0.0,
+        }
         with torch.no_grad():
             for batch in tqdm(
                 dataloader, unit="batch", mininterval=0, disable=not verbose
@@ -277,33 +342,46 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
                 xhat, posterior = vae(x)
                 z_c, z_s = posterior.sample().split_with_sizes(channel_split, dim=1)
 
-                rec_loss = F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3))
-                kl_loss = posterior.kl()
-                con_loss = self.contrastive_criterions["content"](z_c, y)
-                ps_loss = self.contrastive_criterions["style"](z_s, y, ps=True)
+                rec_loss = (
+                    F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3)).mean()
+                )
+                kl_loss = posterior.kl().mean()
+                con_loss = self.contrastive_criterions["global"]["content"](
+                    z_c, y
+                ).mean()
+                ps_loss = self.contrastive_criterions["global"]["style"](
+                    z_s, y, ps=True
+                ).mean()
 
-                losses[0] += rec_loss.mean().item()
-                losses[1] += kl_loss.mean().item()
-                losses[2] += con_loss.mean().item()
-                losses[3] += ps_loss.mean().item()
+                losses["rec_loss"] += rec_loss.item()
+                losses["kl_loss"] += kl_loss.item()
+                losses["con_loss"] += con_loss.item()
+                losses["ps_loss"] += ps_loss.item()
 
-        val_rec = losses[0] / len(dataloader)
-        val_kl = losses[1] / len(dataloader)
-        val_con = losses[2] / len(dataloader)
-        val_ps = losses[3] / len(dataloader)
-        return val_rec, val_kl, val_con, val_ps
+                if "dense" in self.contrastive_criterions:
+                    dense_con_loss = self.contrastive_criterions["dense"]["content"](
+                        z_c, y
+                    ).mean()
+                    dense_ps_loss = self.contrastive_criterions["dense"]["style"](
+                        z_s, y, ps=True
+                    ).mean()
+                    losses["dense_con_loss"] += dense_con_loss.item()
+                    losses["dense_ps_loss"] += dense_ps_loss.item()
+
+        for k in losses:
+            losses[k] /= len(dataloader)
+
+        return losses
 
     def _valid(self, dataloader: DataLoader, verbose: bool, epoch_id: int):
-        val_rec, val_kl, val_con, val_ps = self.evaluate(dataloader, verbose)
+        val_losses = self.evaluate(dataloader, verbose)
+        val_rec = val_losses["rec_loss"]
         if verbose:
             print(f"epoch {epoch_id}/val_rec: {val_rec:.4f}")
+
+        logged_metric = {f"val_{k}": v for k, v in val_losses.items()}
         valid_metrics = {
             "callback_metric": val_rec,
-            "logged_metric": {
-                "val_rec": val_rec,
-                "val_kl": val_kl,
-                "val_con": val_con,
-                "val_ps": val_ps,
-            },
+            "logged_metric": logged_metric,
         }
         return valid_metrics
