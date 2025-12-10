@@ -42,6 +42,7 @@ class SupCon(nn.Module):
         if self.use_proj:
             self.proj = nn.Sequential(
                 nn.LazyLinear(128),
+                nn.BatchNorm1d(128),
                 nn.ReLU(),
                 nn.LazyLinear(128),
             )

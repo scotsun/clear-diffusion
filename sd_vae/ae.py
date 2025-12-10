@@ -34,7 +34,7 @@ class Encoder(nn.Module):
             _down = build_downblock(
                 in_channels=channels,
                 out_channels=channels_list[i + 1],
-                n_resnet_blocks=n_resnet_blocks,
+                n_resnet_blocks=n_resnet_blocks + 1,
                 downsample=i < self.n_resolutions - 1,
                 norm_channels=norm_channels,
             )
