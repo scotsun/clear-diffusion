@@ -1,0 +1,74 @@
+device: mps
+
+dataset:
+  name: camelyon17           # Dataset name
+  root: ~/datasets/camelyon17  # Dataset root path
+  
+  # Data splits
+  split_ratio: [40000, 10000, 10000]
+
+# CLEAR VAE Training Configuration
+# Generated from Python config dict
+
+# ============================================
+# Hyperparameters
+# ============================================
+hyperparameters:
+  lr: 0.0005              # Learning rate
+  optimizer: Adam
+  batch_size: 128
+  beta: 0.2               # KL loss weight (1/5)
+  gamma_1: 2000           # Content contrastive loss weight
+  gamma_2: 2000           # Style pseudo-supervision loss weight
+
+# ============================================
+# VAE Architecture
+# ============================================
+vae_architecture:
+  channels: 32
+  channel_multipliers: [1, 2, 4]
+  n_resnet_blocks: 1
+  x_channels: 3           # Input channels (RGB)
+  z_channels: 15          # Total latent dimension
+  channel_split: [3, 12]  # [content_dim, style_dim]
+  norm_channels: 32
+  n_heads: 4              # Attention heads
+
+# ============================================
+# Contrastive Learning Module
+# ============================================
+contrastive_module:
+  contrastive_method: DenseSNN
+  temperature: [0.2, 0.2]   # [content_temp, style_temp]
+  learnable_temp: true
+  pool: gap                 # Global average pooling
+  use_proj: true            # Use projection head
+  use_dense: false          # Dense contrastive disabled
+
+# ============================================
+# Trainer Configuration
+# ============================================
+trainer:
+  type: CLEAR_VAEFirstStageTrainer
+  early_stopping:
+    patience: 8
+    monitor: val_rec_loss
+  verbose_period: 2
+  weight_init: silu_xavier_init
+
+# ============================================
+# Data Configuration
+# ============================================
+data:
+  input_shape: [1, 32, 32]
+  output_shape: [1, 32, 32]
+  dtype: float32
+
+epochs: 25
+
+
+TSNE:
+  style_label: []
+  content_label: []
+
+image_path: outputs/images
