@@ -1,12 +1,72 @@
+# CLEAR VAE Training Configuration
+
+# ============================================
+# Device & Seed
+# ============================================
+
 device: mps
+seed: 42
+
+# ============================================
+# Dataset Configuration
+# ============================================
 
 dataset:
-  name: camelyon17           # Dataset name
-  root: ~/datasets/camelyon17  # Dataset root path
-  
-  # Data splits
-  split_ratio: [40000, 10000, 10000]
+  name: mnist
+  root: ~/datasets/mnist
+  split_sizes: [40000, 10000, 10000] 
+  input_shape: [3, 32, 32]
+  output_shape: [3, 32, 32]
+  dtype: float32
+  generator:
+    corruptions:
+      - name: rgb_change
+        params:
+          color: red
+        probability: 0.2
+      
+      - name: rgb_change
+        params:
+          color: green
+        probability: 0.2
+      
+      - name: rgb_change
+        params:
+          color: blue
+        probability: 0.2
+      
+      - name: rgb_change
+        params:
+          color: yellow
+        probability: 0.2
+      
+      - name: rgb_change
+        params:
+          color: magenta
+        probability: 0.2
 
+
+
+  train_loader:
+    batch_size: 128
+    shuffle: true
+    num_workers: 0
+    pin_memory: false  
+    drop_last: true
+  
+  valid_loader:
+    batch_size: 256
+    shuffle: false
+    num_workers: 0
+    pin_memory: false
+    drop_last: false
+  
+  test_loader:
+    batch_size: 128
+    shuffle: false
+    num_workers: 0
+    pin_memory: false
+    drop_last: false
 # CLEAR VAE Training Configuration
 # Generated from Python config dict
 
@@ -38,7 +98,7 @@ vae_architecture:
 # Contrastive Learning Module
 # ============================================
 contrastive_module:
-  contrastive_method: DenseSNN
+  contrastive_method: SNN
   temperature: [0.2, 0.2]   # [content_temp, style_temp]
   learnable_temp: true
   pool: gap                 # Global average pooling
@@ -50,6 +110,7 @@ contrastive_module:
 # ============================================
 trainer:
   type: CLEAR_VAEFirstStageTrainer
+  num_epochs: 1
   early_stopping:
     patience: 8
     monitor: val_rec_loss
@@ -64,11 +125,22 @@ data:
   output_shape: [1, 32, 32]
   dtype: float32
 
-epochs: 25
+# ============================================
+# MLflow Configuration
+# ============================================
 
+mlflow:
+  experiment_name: CLEAR_VAE_StyledMNIST
+  run_name: null  
+  tracking_uri: ./mlruns
+  log_every_n_steps: 10
 
-TSNE:
-  style_label: []
-  content_label: []
+# ============================================
+# Visualization Configuration
+# ============================================
+
+tsne:
+  style_labels: ['red', 'green', 'blue', 'yellow', 'magenta']
+  content_labels: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
 image_path: outputs/images

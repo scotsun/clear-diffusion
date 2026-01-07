@@ -23,6 +23,7 @@ from data_utils.styled_mnist.data_utils import StyledMNISTGenerator, StyledMNIST
 import torch.nn as nn
 import torch.nn.init as init
 
+import random
 
 import matplotlib.pyplot as plt
 from torchvision.utils import make_grid
@@ -31,8 +32,21 @@ from datetime import datetime
 import os
 import math
 from sklearn.manifold import TSNE
+from functools import partial
 
 
+def set_seed(seed):
+    """Set random seed for reproducibility"""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    if torch.backends.mps.is_available():
+        torch.mps.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 def init_weights(m):
     if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
@@ -108,16 +122,87 @@ def save_mu_channels(mu, start, end, title_prefix, filename, nrow_grid=16, out_d
 
 
 
+def build_corruption_dict(corruption_configs):
+    """    
+    Args:
+        corruption_configs: list of dict, each with:
+            - name: corruption function name
+            - params: dict of parameters
+            - probability: float
+    
+    Returns:
+        dict: {corruption_function: probability}
+    """
+    corruption_dict = {}
+    
+    for config in corruption_configs:
+        corruption_name = config['name']
+        params = config.get('params', {})
+        probability = config['probability']
+        
+        if not hasattr(corruptions, corruption_name):
+            raise ValueError(f"Unknown corruption: {corruption_name}")
+        
+        corruption_func = getattr(corruptions, corruption_name)
+        
+        if params:
+            wrapped_func = partial(corruption_func, **params)
+        else:
+            wrapped_func = corruption_func
+        
+        corruption_dict[wrapped_func] = probability
+    
+    return corruption_dict
+
+
+def load_styled_mnist_from_config(config):
+    dataset_config = config['dataset']
+    
+    mnist = MNIST(
+        root=dataset_config['root'],
+        train=True,
+        download=True
+    )
+    
+    generator_config = dataset_config.get('generator', {})
+    corruption_configs = generator_config.get('corruptions', [])
+    
+    if not corruption_configs:
+        raise ValueError("No corruptions specified in config")
+    
+    corruption_dict = build_corruption_dict(corruption_configs)
+    
+    generator = StyledMNISTGenerator(mnist, corruption_dict)
+
+    styled_mnist = StyledMNIST(
+        generator,
+        transforms.Compose([
+            transforms.ToTensor(),
+            lambda img: img / 255.0,
+        ])
+    )
+
+
+    return styled_mnist
+
 def main():
     with open('config.yaml', 'r') as f:
         config = yaml.safe_load(f)
 
-    dataset = config['data']['name']
+    set_seed(config.get('seed', 42))
+    dataset_config = config['dataset']
+    data_name = dataset_config['name']
+    input_shape = dataset_config.get('input_shape', [3, 32, 32])
+    if data_name in ['mnist', 'styled_mnist']:
+        dataset = load_styled_mnist_from_config(config)
+        
+    
     # to do: add ways to analyze data
-    train, test, valid = random_split(dataset, [40000, 10000, 10000])
-    train_loader = DataLoader(train, batch_size=128, shuffle=True)
-    valid_loader = DataLoader(valid, batch_size=256, shuffle=False)
-    test_loader = DataLoader(test, batch_size=128, shuffle=False)
+    split_sizes = config['dataset']['split_sizes']
+    train, test, valid = random_split(dataset, split_sizes)
+    train_loader = DataLoader(train, **dataset_config['train_loader'])
+    valid_loader = DataLoader(valid, **dataset_config['valid_loader'])
+    test_loader = DataLoader(test, **dataset_config['test_loader'])
 
     params = config['hyperparameters']
     vae_config = config['vae_architecture']
@@ -166,7 +251,8 @@ def main():
     mlflow.set_experiment("test")
     with mlflow.start_run():
         mlflow.log_params(params)
-        trainer.fit(epochs=config['epochs'], train_loader=train_loader, valid_loader=valid_loader)
+        trainer.fit(epochs=config['trainer']['num_epochs'], train_loader=train_loader, valid_loader=valid_loader)
+
 
     print("content tau:", trainer.contrastive_criterions['global']['content'].log_tau.exp().item())
     print("style tau:", trainer.contrastive_criterions['global']['style'].log_tau.exp().item())
@@ -206,10 +292,10 @@ def main():
         filename=f"{timestamp}_style_mu.png",
         out_dir= config['image_path']
     )
-    z_c, z_s = mu.split_with_sizes(params['channel_split'], dim=1)
+    z_c, z_s = mu.split_with_sizes(vae_config['channel_split'], dim=1)
     x = next(iter(test_loader))['image'].to(device)
 
-    select = torch.randint(0, 128, (16,)).tolist()
+    select = torch.randint(0, len(x), (min(16, len(x)),)).tolist()
     feature_swapping_plot(
         z_c[select],
         z_s[select],
@@ -250,7 +336,7 @@ def main():
     cbar = fig.colorbar(axs0, ax=axs[0])
     axs[0].set_title('color by content')
 
-    style_labels = config['TSNE']['style_label']
+    style_labels = config['tsne']['style_labels']
     cmap = plt.get_cmap('Set1')
     colors = [cmap(i) for i in np.linspace(0, 1, len(style_labels))]
     for g in range(len(style_labels)):
@@ -295,7 +381,7 @@ def main():
     cbar = fig.colorbar(axs0, ax=axs[0])
     axs[0].set_title('color by content (5 types)')
 
-    style_labels = ['red', 'green', 'blue', 'yellow', 'purple']
+    style_labels = config['tsne']['style_labels']
     cmap = plt.get_cmap('Set1')
     colors = [cmap(i) for i in np.linspace(0, 1, len(style_labels))]
 
@@ -310,7 +396,7 @@ def main():
             label=style_labels[g],
         )
 
-    axs[1].set_title('color by style (5 types)')
+    axs[1].set_title('color by style')
     axs[1].legend()
     plt.tight_layout()
     plt.savefig(os.path.join(config['image_path'], "tsne_plot_2.png"), dpi=200, bbox_inches="tight")
@@ -320,3 +406,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
