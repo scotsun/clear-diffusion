@@ -5,18 +5,8 @@ from torchvision import transforms
 
 def build_dataloader(data_root: str, batch_size: int):
     dataset = get_dataset(dataset="camelyon17", root_dir=data_root, download=True)
-    train_data = dataset.get_subset(
-        "train",
-        transform=transforms.Compose(
-            [transforms.Resize((64, 64)), transforms.ToTensor()]
-        ),
-    )
-    valid_data = dataset.get_subset(
-        "val",
-        transform=transforms.Compose(
-            [transforms.Resize((64, 64)), transforms.ToTensor()]
-        ),
-    )
+    train_data = dataset.get_subset("train", transform=transforms.ToTensor())
+    valid_data = dataset.get_subset("val", transform=transforms.ToTensor())
     test_data = dataset.get_subset(
         "test",
         transform=transforms.Compose(

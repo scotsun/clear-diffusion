@@ -46,7 +46,7 @@ def main():
     # data
     np.random.seed(101)
     torch.manual_seed(101)
-    mnist = MNIST("./data", train=True, download=False)
+    mnist = MNIST("./data", train=True, download=True)
     generator = StyledMNISTGenerator(
         mnist,
         {
