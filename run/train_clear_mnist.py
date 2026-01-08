@@ -136,7 +136,7 @@ def main():
     styles = torch.cat(styles, dim=0)
 
     tsne = TSNE(n_components=2, init="pca")
-    z_2d = tsne.fit_transform(z_cs.view(z_cs.shape[0], -1).numpy())
+    z_2d = tsne.fit_transform(z_cs.reshape(z_cs.shape[0], -1).numpy())
 
     fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 
@@ -161,7 +161,7 @@ def main():
         bbox_inches="tight",
     )
 
-    X = z_ss.view(z_ss.shape[0], -1).cpu().numpy()
+    X = z_ss.reshape(z_ss.shape[0], -1).cpu().numpy()
     y_content = labels.cpu().numpy()
     y_style = styles.cpu().numpy()
 
