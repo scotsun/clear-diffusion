@@ -1,7 +1,7 @@
 import yaml
 
-from trainers import EarlyStopping
-from trainers.first_stage_trainer import CLEAR_VAEFirstStageTrainer
+from src.trainers import EarlyStopping
+from src.trainers.first_stage_trainer import CLEAR_VAEFirstStageTrainer
 
 
 def load_cfg(cfg_path) -> dict:

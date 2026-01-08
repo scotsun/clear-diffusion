@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.distribution import IsotropicNormalDistribution
+from src.modules.distribution import IsotropicNormalDistribution
 from .blocks import (
     build_downblock,
     build_upblock,

@@ -17,7 +17,7 @@ vae:
 
 # training
 train:
-    epochs: 31
+    epochs: 1
     early_stopping_patience: 5
 
 # trainer

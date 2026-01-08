@@ -1,9 +1,10 @@
 import os
 import torch
-from torchvision.utils import make_grid
 import matplotlib.pyplot as plt
 
-from sd_vae.ae import VAE
+from torchvision.utils import make_grid
+
+from src.sd_vae.ae import VAE
 
 
 def interpolate_latent(latent1, latent2, num_steps):

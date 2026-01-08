@@ -8,9 +8,9 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from mlflow.models import ModelSignature
 
-from sd_vae.ae import VAE
-from modules.loss import d_hinge_loss, g_hinge_loss
-from modules.loss import SupCon, SNN, DenseSupCon  # noqa
+from src.sd_vae.ae import VAE
+from src.modules.loss import d_hinge_loss, g_hinge_loss
+from src.modules.loss import SupCon, SNN, DenseSupCon  # noqa
 from . import EarlyStopping, Trainer
 
 

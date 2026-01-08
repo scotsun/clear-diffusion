@@ -18,11 +18,14 @@ from sklearn.manifold import TSNE
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from sd_vae.ae import VAE
-from exp_utils.train_utils import load_cfg, build_first_stage_trainer
-from exp_utils.visual import feature_swapping_plot
-from data_utils.styled_mnist import corruptions
-from data_utils.styled_mnist.data_utils import StyledMNISTGenerator, build_dataloaders
+from src.sd_vae.ae import VAE
+from src.utils.exp_utils.train_utils import load_cfg, build_first_stage_trainer
+from src.utils.exp_utils.visual import feature_swapping_plot
+from src.utils.data_utils.styled_mnist import corruptions
+from src.utils.data_utils.styled_mnist.data_utils import (
+    StyledMNISTGenerator,
+    build_dataloaders,
+)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
