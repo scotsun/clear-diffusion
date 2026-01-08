@@ -1,3 +1,4 @@
+import os
 import torch
 from torchvision.utils import make_grid
 import matplotlib.pyplot as plt
@@ -34,7 +35,15 @@ def make_colored_grid(imgs, nrow, color: str):
     return grid
 
 
-def feature_swapping_plot(z_c, z_s, x, vae: torch.nn.Module, img_size=32):
+def feature_swapping_plot(
+    z_c,
+    z_s,
+    x,
+    vae: torch.nn.Module,
+    img_size=32,
+    out_dir=None,
+    run_id=None,
+):
     with torch.no_grad():
         n = z_c.size(0)
         device = z_c.device
@@ -66,7 +75,15 @@ def feature_swapping_plot(z_c, z_s, x, vae: torch.nn.Module, img_size=32):
 
         plt.imshow(final_grid.permute(1, 2, 0).cpu().numpy())
         plt.axis("off")
-        plt.show()
+        if out_dir is not None:
+            # check if filepath exist
+            out_dir = os.path.join(out_dir, run_id)
+            if not os.path.exists(out_dir):
+                os.makedirs(out_dir)
+            filepath = os.path.join(out_dir, "swap.png")
+            plt.savefig(filepath, bbox_inches="tight", pad_inches=0)
+        else:
+            plt.show()
 
         return
 

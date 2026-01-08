@@ -1,5 +1,43 @@
-dataset_params:
+# dataset
+data:
     name: "mnist"
+    data_root: "./data"
+    img_size: 32
+    batch_size: 256
 
-vae_params:
-    num_heads: 16
+# model
+vae:
+    x_channels: 3
+    z_channels: 12
+    channels: 32
+    channel_multipliers: [1, 2, 4]
+    n_resnet_blocks: 1
+    norm_channels: 32
+    n_heads: 4
+
+# training
+train:
+    epochs: 31
+    early_stopping_patience: 5
+
+# trainer
+trainer_param:
+    beta: 0.1
+    gamma_c: 10000
+    gamma_s: 10000
+    vae_lr: 0.001
+    channel_split: [4, 8]
+    contrastive_module:
+        contrastive_method: "SNN"
+        temperature: [0.1, 1]
+        learnable_temp: True
+        pool: "gap"
+        use_proj: True
+        use_dense: False
+
+# misc
+tsne:
+  style_labels: ['red', 'green', 'blue', 'yellow', 'magenta']
+  content_labels: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+
+out_dir: "./out/mnist"

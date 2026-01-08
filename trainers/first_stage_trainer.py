@@ -250,7 +250,7 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
 
         channel_split = self.args["channel_split"]
         beta = self.args["beta"]
-        gamma = self.args["gamma"]
+        gamma_c, gamma_s = self.args["gamma_c"], self.args["gamma_s"]
 
         with tqdm(dataloader, unit="batch", mininterval=0, disable=not verbose) as bar:
             bar.set_description(f"Epoch {epoch_id}")
@@ -283,13 +283,18 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
                     loss = loss = (
                         rec_loss
                         + beta * kl_loss
-                        + gamma * (0.5 * con_loss + 0.5 * dense_con_loss)
-                        + gamma * (0.5 * ps_loss + 0.5 * dense_ps_loss)
+                        + gamma_c * (0.5 * con_loss + 0.5 * dense_con_loss)
+                        + gamma_s * (0.5 * ps_loss + 0.5 * dense_ps_loss)
                     )
                 else:
                     dense_con_loss = torch.tensor(0.0, device=device)
                     dense_ps_loss = torch.tensor(0.0, device=device)
-                    loss = rec_loss + beta * kl_loss + gamma * con_loss + 0 * ps_loss
+                    loss = (
+                        rec_loss
+                        + beta * kl_loss
+                        + gamma_c * con_loss
+                        + gamma_s * ps_loss
+                    )
 
                 loss.backward()
                 opt.step()

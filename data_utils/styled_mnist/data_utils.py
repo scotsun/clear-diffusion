@@ -4,7 +4,7 @@ import numpy as np
 from PIL import ImageOps
 import torchvision
 import torchvision.transforms as transforms
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader, random_split
 from tqdm import tqdm
 
 from . import corruptions
@@ -75,3 +75,20 @@ class StyledMNIST(Dataset):
     def display(self, idx):
         img = self.__getitem__(idx)["image"]
         return transforms.ToPILImage()(img)
+
+
+def build_dataloaders(generator: StyledMNISTGenerator, batch_size: int = 256):
+    dataset = StyledMNIST(
+        generator,
+        transforms.Compose(
+            [
+                transforms.ToTensor(),
+                lambda img: img / 255.0,
+            ]
+        ),
+    )
+    train, test, valid = random_split(dataset, [40000, 10000, 10000])
+    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True)
+    valid_loader = DataLoader(valid, batch_size=batch_size, shuffle=False)
+    test_loader = DataLoader(test, batch_size=batch_size, shuffle=False)
+    return {"train": train_loader, "valid": valid_loader, "test": test_loader}
