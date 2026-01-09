@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 import json
 
+import argparse
 import torch
 import torch.nn as nn
 import torch.nn.init as init
@@ -42,8 +43,16 @@ def xavier_init(model):
             init.zeros_(m.bias)
 
 
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str, default="mnist.yaml")
+    parser.add_argument("--exp_name", type=str, default="test")
+    return parser.parse_args()
+
+
 def main():
-    cfg = load_cfg("./config/mnist.yaml")
+    args = get_args()
+    cfg = load_cfg(f"./config/{args.config}")
     # data
     np.random.seed(101)
     torch.manual_seed(101)
@@ -85,7 +94,7 @@ def main():
 
     # train
     mlflow.set_tracking_uri("./mlruns")
-    mlflow.set_experiment("test")
+    mlflow.set_experiment(args.exp_name)
     with mlflow.start_run() as run:
         mlflow.log_params(cfg["trainer_param"])
         trainer.fit(

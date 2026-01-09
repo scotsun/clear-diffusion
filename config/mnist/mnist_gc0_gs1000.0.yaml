@@ -21,8 +21,8 @@ trainer_param:
     - 1
     use_dense: false
     use_proj: true
-  gamma_c: 10000
-  gamma_s: 10000
+  gamma_c: 0
+  gamma_s: 1000.0
   vae_lr: 0.0003
 tsne:
   content_labels:
