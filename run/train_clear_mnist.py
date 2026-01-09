@@ -45,14 +45,14 @@ def xavier_init(model):
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default="mnist.yaml")
+    parser.add_argument("--config", type=str, default="./config/mnist.yaml")
     parser.add_argument("--exp_name", type=str, default="test")
     return parser.parse_args()
 
 
 def main():
     args = get_args()
-    cfg = load_cfg(f"./config/{args.config}")
+    cfg = load_cfg(args.config)
     # data
     np.random.seed(101)
     torch.manual_seed(101)
