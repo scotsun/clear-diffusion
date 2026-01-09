@@ -1,6 +1,7 @@
 import os
 import sys
 from pathlib import Path
+import json
 
 import torch
 import torch.nn as nn
@@ -219,6 +220,11 @@ def main():
         dpi=200,
         bbox_inches="tight",
     )
+
+    with open(
+        os.path.join(cfg["out_dir"], run.info.run_id, "trainer_param.json"), "w"
+    ) as f:
+        json.dump(cfg["trainer_param"], f, indent=4)
 
 
 if __name__ == "__main__":
