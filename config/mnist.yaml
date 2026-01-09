@@ -25,7 +25,7 @@ trainer_param:
     beta: 0.1
     gamma_c: 10000
     gamma_s: 10000
-    vae_lr: 0.001
+    vae_lr: 0.0003
     channel_split: [4, 8]
     contrastive_module:
         contrastive_method: "SNN"
