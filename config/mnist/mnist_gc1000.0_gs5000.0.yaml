@@ -1,0 +1,55 @@
+data:
+  batch_size: 256
+  data_root: ./data
+  img_size: 32
+  name: mnist
+out_dir: ./out/mnist
+train:
+  early_stopping_patience: 5
+  epochs: 31
+trainer_param:
+  beta: 0.1
+  channel_split:
+  - 4
+  - 8
+  contrastive_module:
+    contrastive_method: SNN
+    learnable_temp: true
+    pool: gap
+    temperature:
+    - 0.1
+    - 1
+    use_dense: false
+    use_proj: true
+  gamma_c: 1000.0
+  gamma_s: 5000.0
+  vae_lr: 0.0003
+tsne:
+  content_labels:
+  - '0'
+  - '1'
+  - '2'
+  - '3'
+  - '4'
+  - '5'
+  - '6'
+  - '7'
+  - '8'
+  - '9'
+  style_labels:
+  - red
+  - green
+  - blue
+  - yellow
+  - magenta
+vae:
+  channel_multipliers:
+  - 1
+  - 2
+  - 4
+  channels: 32
+  n_heads: 4
+  n_resnet_blocks: 1
+  norm_channels: 32
+  x_channels: 3
+  z_channels: 12
