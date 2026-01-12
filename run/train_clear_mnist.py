@@ -23,13 +23,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.sd_vae.ae import VAE
 from src.utils.exp_utils.train_utils import load_cfg, build_first_stage_trainer
 from src.utils.exp_utils.visual import feature_swapping_plot
-from src.utils.data_utils.camelyon import build_dataloader
-from src.utils.data_utils.camelyon17.dict_data_wrapper import DictDataWrapper
+from src.utils.data_utils.styled_mnist import corruptions
+from src.utils.data_utils.styled_mnist.data_utils import (
+    StyledMNISTGenerator,
+    build_dataloaders,
+)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-
-
-
 
 
 def xavier_init(model):
@@ -45,8 +45,7 @@ def xavier_init(model):
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default="./config/camelyon17.yaml")
-    parser.add_argument("--exp_name", type=str, default="test")
+    parser.add_argument("--config", type=str, default="./config/mnist.yaml")
     return parser.parse_args()
 
 
@@ -56,13 +55,18 @@ def main():
     # data
     np.random.seed(101)
     torch.manual_seed(101)
-
-    dataloaders = build_dataloader(data_root="./data", batch_size=32)
-    dataloaders["train"] = DictDataWrapper(dataloaders["train"])
-    if "valid" in dataloaders:
-        dataloaders["valid"] = DictDataWrapper(dataloaders["valid"])
-    if "test" in dataloaders:
-        dataloaders["test"] = DictDataWrapper(dataloaders["test"])
+    mnist = MNIST("./data", train=True, download=True)
+    generator = StyledMNISTGenerator(
+        mnist,
+        {
+            lambda x: corruptions.rgb_change(x, "red"): 0.2,
+            lambda x: corruptions.rgb_change(x, "green"): 0.2,
+            lambda x: corruptions.rgb_change(x, "blue"): 0.2,
+            lambda x: corruptions.rgb_change(x, "yellow"): 0.2,
+            lambda x: corruptions.rgb_change(x, "magenta"): 0.2,
+        },
+    )
+    dataloaders = build_dataloaders(generator)
 
     # data signature
     img_size = cfg["data"]["img_size"]
@@ -99,7 +103,7 @@ def main():
         )
 
     # eval
-    x = next(iter(dataloaders["test"]))[0].to(device)
+    x = next(iter(dataloaders["test"]))["image"].to(device)
     best_model = mlflow.pytorch.load_model(f"runs:/{run.info.run_id}/best_model")
     with torch.no_grad():
         best_model.eval()
@@ -125,7 +129,7 @@ def main():
     with torch.no_grad():
         best_model.eval()
         for batch in tqdm(dataloaders["test"]):
-            x = batch[0].to(device)
+            x = batch["image"].to(device)
             _, posterior = best_model(x)
             z_c, z_s = posterior.sample().split_with_sizes(
                 cfg["trainer_param"]["channel_split"], dim=1

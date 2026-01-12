@@ -1,3 +1,7 @@
+mlflow:
+  run_name: clear_mnist
+  experiment_name: clear_mnist_experiment
+
 data:
   batch_size: 256
   data_root: ./data

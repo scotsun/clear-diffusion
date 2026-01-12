@@ -1,3 +1,7 @@
+mlflow:
+  run_name: clear_camelyon17
+  experiment_name: clear_camelyon17_experiment
+
 data:
   batch_size: 256
   data_root: ./data
@@ -29,8 +33,8 @@ tsne:
   - '0'
   - '1'
   style_labels:
-  - ‘0’
-  - ‘1’
+  - '0'
+  - '1'
   - '2'
   - '3'
   - '4'
