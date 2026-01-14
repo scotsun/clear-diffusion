@@ -1,0 +1,26 @@
+mlflow:
+  run_name: clear-camelyon-0
+  experiment_name: clear-camelyon
+data:
+  batch_size: 64
+  data_root: /hpc/group/engelhardlab/ms1008/image_data
+  img_size: 96
+  name: camelyon
+out_dir: ./out/camelyon
+train:
+  early_stopping_patience: 5
+  epochs: 31
+trainer_params:
+  # to add in dcc 
+vae:
+  channel_multipliers:
+  - 1
+  - 2
+  - 4
+  - 4
+  channels: 32
+  n_heads: 4
+  n_resnet_blocks: 2
+  norm_channels: 32
+  x_channels: 3
+  z_channels: 12
