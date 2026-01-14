@@ -88,3 +88,11 @@ def main():
     z_c, z_s = posterior.mu.split_with_sizes(
         cfg["trainer_param"]["channel_split"], dim=1
     )
+    select = torch.randint(0, 32, (5,)).tolist()
+    feature_swapping_plot(
+        z_c[select],
+        z_s[select],
+        x[select],
+        best_model,
+        img_size=96,
+    )
