@@ -1,4 +1,6 @@
 import yaml
+import torch.nn as nn
+import torch.nn.init as init
 
 from src.trainers import EarlyStopping
 from src.trainers.first_stage_trainer import CLEAR_VAEFirstStageTrainer
@@ -26,3 +28,14 @@ def build_first_stage_trainer(cfg, trainer_class, model, signature, device):
     )
 
     return trainer
+
+
+def xavier_init(model):
+    for m in model.modules():
+        if isinstance(m, (nn.Linear, nn.Conv2d, nn.ConvTranspose2d)):
+            init.xavier_uniform_(m.weight)
+            if m.bias is not None:
+                init.zeros_(m.bias)
+        elif isinstance(m, nn.BatchNorm2d):
+            init.ones_(m.weight)
+            init.zeros_(m.bias)

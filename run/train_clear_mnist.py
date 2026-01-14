@@ -5,8 +5,6 @@ import json
 
 import argparse
 import torch
-import torch.nn as nn
-import torch.nn.init as init
 import mlflow
 import numpy as np
 import matplotlib.pyplot as plt
@@ -21,7 +19,11 @@ from sklearn.manifold import TSNE
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.sd_vae.ae import VAE
-from src.utils.exp_utils.train_utils import load_cfg, build_first_stage_trainer
+from src.utils.exp_utils.train_utils import (
+    load_cfg,
+    build_first_stage_trainer,
+    xavier_init,
+)
 from src.utils.exp_utils.visual import feature_swapping_plot
 from src.utils.data_utils.styled_mnist import corruptions
 from src.utils.data_utils.styled_mnist.data_utils import (
@@ -30,17 +32,6 @@ from src.utils.data_utils.styled_mnist.data_utils import (
 )
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-
-
-def xavier_init(model):
-    for m in model.modules():
-        if isinstance(m, (nn.Linear, nn.Conv2d, nn.ConvTranspose2d)):
-            init.xavier_uniform_(m.weight)
-            if m.bias is not None:
-                init.zeros_(m.bias)
-        elif isinstance(m, nn.BatchNorm2d):
-            init.ones_(m.weight)
-            init.zeros_(m.bias)
 
 
 def get_args():
@@ -96,7 +87,7 @@ def main():
     mlflow.set_tracking_uri("./mlruns")
     mlflow.set_experiment(args.exp_name)
     with mlflow.start_run() as run:
-        mlflow.log_params(cfg["trainer_param"])
+        mlflow.log_params(cfg["vae"] | cfg["trainer_param"])
         trainer.fit(
             epochs=cfg["train"]["epochs"],
             train_loader=dataloaders["train"],

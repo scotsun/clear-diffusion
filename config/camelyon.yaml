@@ -10,8 +10,23 @@ out_dir: ./out/camelyon
 train:
   early_stopping_patience: 5
   epochs: 31
-trainer_params:
-  # to add in dcc 
+trainer_param:
+  beta: 0.1
+  channel_split:
+  - 4
+  - 8
+  contrastive_module:
+    contrastive_method: SNN
+    learnable_temp: true
+    pool: gap
+    temperature:
+    - 0.1
+    - 1
+    use_dense: false
+    use_proj: true
+  gamma_c: 1000
+  gamma_s: 1000
+  vae_lr: 0.0003
 vae:
   channel_multipliers:
   - 1

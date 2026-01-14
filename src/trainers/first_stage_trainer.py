@@ -239,7 +239,7 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
                 self.contrastive_criterions["dense"]["content"].parameters()
             ) + list(self.contrastive_criterions["dense"]["style"].parameters())
 
-        vae_opt = optim.Adam(param_list, lr=args["vae_lr"])
+        vae_opt = optim.AdamW(param_list, lr=args["vae_lr"])
         self.opts = {"vae_opt": vae_opt}
 
     def _train(self, dataloader: DataLoader, verbose: bool, epoch_id: int):
