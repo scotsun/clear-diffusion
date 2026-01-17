@@ -349,19 +349,21 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
                 x, y = batch["image"].to(device), batch["label"].to(device)
                 if self.transform:
                     x = self.transform(x)
-                xhat, posterior = vae(x)
-                z_c, z_s = posterior.sample().split_with_sizes(channel_split, dim=1)
 
-                rec_loss = (
-                    F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3)).mean()
-                )
-                kl_loss = posterior.kl().mean()
-                con_loss = self.contrastive_criterions["global"]["content"](
-                    z_c, y
-                ).mean()
-                ps_loss = self.contrastive_criterions["global"]["style"](
-                    z_s, y, ps=True
-                ).mean()
+                with autocast(device_type="cuda", dtype=torch.float16):
+                    xhat, posterior = vae(x)
+                    z_c, z_s = posterior.sample().split_with_sizes(channel_split, dim=1)
+
+                    rec_loss = (
+                        F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3)).mean()
+                    )
+                    kl_loss = posterior.kl().mean()
+                    con_loss = self.contrastive_criterions["global"]["content"](
+                        z_c, y
+                    ).mean()
+                    ps_loss = self.contrastive_criterions["global"]["style"](
+                        z_s, y, ps=True
+                    ).mean()
 
                 losses["rec_loss"] += rec_loss.item()
                 losses["kl_loss"] += kl_loss.item()
