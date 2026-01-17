@@ -4,6 +4,7 @@ import mlflow
 
 from abc import ABC, abstractmethod
 from torch.utils.data import DataLoader
+from torch import GradScaler
 from mlflow.models import ModelSignature
 
 
@@ -53,6 +54,7 @@ class Trainer(ABC):
         self.verbose_period = verbose_period
         self.device = device
         self.model_signature = model_signature
+        self.scaler = GradScaler(device=device)
         self.transform = transform
         self.model_state = model.state_dict().copy()
         self.args = args
