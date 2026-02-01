@@ -9,7 +9,7 @@ data:
 out_dir: ./out/camelyon
 train:
   early_stopping_patience: 5
-  epochs: 31
+  epochs: 20
 trainer_param:
   beta: 0.1
   channel_split:

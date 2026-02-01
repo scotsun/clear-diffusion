@@ -1,0 +1,14 @@
+artifact_uri: /hpc/home/zg121/clear-diffusion/mlruns/608700995792506358/8a30d6b78488426bab8b7b09b014b80c/artifacts
+end_time: 1769538418052
+entry_point_name: ''
+experiment_id: '608700995792506358'
+lifecycle_stage: active
+run_id: 8a30d6b78488426bab8b7b09b014b80c
+run_name: agreeable-toad-6
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1769520150152
+status: 3
+tags: []
+user_id: zg121
