@@ -133,16 +133,15 @@ class VAEFirstStageTrainer(Trainer):
                     mlflow.log_metrics(metrics, step=cur_step)
         return
 
+    @torch.no_grad()
     def evaluate(self, dataloader: DataLoader, verbose: bool):
         vae: VAE = self.model
         vae.eval()
         device = self.device
 
         total_rec_loss, total_kl_loss = 0.0, 0.0
-        with torch.no_grad():
-            for batch in tqdm(
-                dataloader, unit="batch", mininterval=0, disable=not verbose
-            ):
+        with tqdm(dataloader, unit="batch", mininterval=0, disable=not verbose) as bar:
+            for batch in bar:
                 x = batch["image"].to(device)
                 if self.transform:
                     x = self.transform(x)
@@ -328,6 +327,7 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
                     )
         return
 
+    @torch.no_grad()
     def evaluate(self, dataloader: DataLoader, verbose: bool):
         vae: VAE = self.model
         vae.eval()
@@ -342,10 +342,8 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
             "dense_con_loss": 0.0,
             "dense_ps_loss": 0.0,
         }
-        with torch.no_grad():
-            for batch in tqdm(
-                dataloader, unit="batch", mininterval=0, disable=not verbose
-            ):
+        with tqdm(dataloader, unit="batch", mininterval=0, disable=not verbose) as bar:
+            for batch in bar:
                 x, y = batch["image"].to(device), batch["label"].to(device)
                 if self.transform:
                     x = self.transform(x)

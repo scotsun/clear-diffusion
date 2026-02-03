@@ -119,62 +119,62 @@ class DownstreamMLPTrainer:
         all_probs = []
         groups = []
 
-        iterator = tqdm(dataloader, disable=not verbose, desc=f"val-epoch {epoch_id}")
-        for batch in iterator:
-            X_batch, y_batch = self._unpack_batch(batch)
+        with tqdm(dataloader, unit="batch", mininterval=0, disable=not verbose) as bar:
+            for batch in bar:
+                x, y = self._unpack_batch(batch)
 
-            g_batch = None
-            if isinstance(batch, dict):
-                if "c" in batch:
-                    g_batch = batch["c"]
-                elif "group" in batch:
-                    g_batch = batch["group"]
-            elif isinstance(batch, (list, tuple)) and len(batch) > 2:
-                g_batch = batch[2]
-            if g_batch is not None:
-                groups.append(g_batch.cpu().numpy())
+                g_batch = None
+                if isinstance(batch, dict):
+                    if "c" in batch:
+                        g_batch = batch["c"]
+                    elif "group" in batch:
+                        g_batch = batch["group"]
+                elif isinstance(batch, (list, tuple)) and len(batch) > 2:
+                    g_batch = batch[2]
+                if g_batch is not None:
+                    groups.append(g_batch.cpu().numpy())
 
-            y_batch = y_batch.reshape(-1)
-            X_batch = X_batch.to(self.device)
+                y = y.reshape(-1)
+                x = x.to(self.device)
 
-            z_feature = self._get_vae_feature(X_batch)
+                z_feature = self._get_vae_feature(x)
 
-            logits = self.model(z_feature)
-            probs = torch.softmax(logits, dim=1)
+                logits = self.model(z_feature)
+                probs = torch.softmax(logits, dim=1)
 
-            all_y.append(y_batch.cpu())
-            all_probs.append(probs.cpu())
+                all_y.append(y.cpu())
+                all_probs.append(probs.cpu())
 
-        all_y = torch.cat(all_y).numpy()
-        all_probs = torch.cat(all_probs).numpy()
+            all_y = torch.cat(all_y).numpy()
+            all_probs = torch.cat(all_probs).numpy()
 
-        if len(groups) > 0:
-            groups = np.concatenate(groups)
-        else:
-            groups = np.zeros_like(all_y)
-
-        acc = accuracy_score(all_y, np.argmax(all_probs, axis=1))
-        aupr_scores = {}
-        auroc_scores = {}
-
-        unique_groups = np.unique(groups)
-        for g in unique_groups:
-            mask = groups == g
-            y_sub = all_y[mask]
-            prob_sub = all_probs[mask]
-
-            if len(np.unique(y_sub)) > 1 and prob_sub.shape[1] >= 2:
-                try:
-                    auroc = roc_auc_score(y_sub, prob_sub[:, 1])
-                    aupr = average_precision_score(y_sub, prob_sub[:, 1])
-                except ValueError:
-                    auroc, aupr = 0.5, 0.0
+            if len(groups) > 0:
+                groups = np.concatenate(groups)
             else:
-                auroc, aupr = 0.5, 0.0
+                groups = np.zeros_like(all_y)
 
-            k = f"group_{g}" if isinstance(g, (int, np.integer)) else str(g)
-            auroc_scores[k] = float(auroc)
-            aupr_scores[k] = float(aupr)
+            acc = accuracy_score(all_y, np.argmax(all_probs, axis=1))
+            aupr_scores = {}
+            auroc_scores = {}
+
+            unique_groups = np.unique(groups)
+            for g in unique_groups:
+                mask = groups == g
+                y_sub = all_y[mask]
+                prob_sub = all_probs[mask]
+
+                if len(np.unique(y_sub)) > 1 and prob_sub.shape[1] >= 2:
+                    try:
+                        auroc = roc_auc_score(y_sub, prob_sub[:, 1])
+                        aupr = average_precision_score(y_sub, prob_sub[:, 1])
+                    except ValueError:
+                        auroc, aupr = 0.5, 0.0
+                else:
+                    auroc, aupr = 0.5, 0.0
+
+                k = f"group_{g}" if isinstance(g, (int, np.integer)) else str(g)
+                auroc_scores[k] = float(auroc)
+                aupr_scores[k] = float(aupr)
 
         return (aupr_scores, auroc_scores), acc
 
