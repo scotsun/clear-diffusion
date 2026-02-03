@@ -20,7 +20,7 @@ trainer_param:
     learnable_temp: true
     pool: gap
     temperature:
-    - 0.1
+    - 0.05
     - 1
     use_dense: false
     use_proj: true
