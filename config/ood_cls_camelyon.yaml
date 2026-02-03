@@ -1,0 +1,16 @@
+mlflow:
+  run_name: clear-camelyon-0
+  experiment_name: clear-camelyon
+data:
+  batch_size: 64
+  img_size: 96
+  name: camelyon
+out_dir: ./out/camelyon
+train:
+  early_stopping_patience: 5
+  epochs: 31
+trainer_param:
+  cls_lr: 0.0003
+vae:
+  run_id: null
+  model_name: null

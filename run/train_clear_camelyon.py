@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 import argparse
@@ -5,6 +6,7 @@ import torch
 import mlflow
 import numpy as np
 
+from dotenv import load_dotenv
 from mlflow.types import Schema, TensorSpec
 from mlflow.models import ModelSignature
 
@@ -26,16 +28,20 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="./config/camelyon.yaml")
+    parser.add_argument("--backend-uri", type=str, default="./mlruns")
+    parser.add_argument("--experiment-name", type=str)
+    parser.add_argument("--run-name", type=str, default=None)
     return parser.parse_args()
 
 
 def main():
+    load_dotenv()
     args = get_args()
     cfg = load_cfg(args.config)
 
     dataloaders = build_dataloader(
-        data_root="/hpc/group/engelhardlab/ms1008/image_data",
-        batch_size=cfg[""],
+        data_root=os.getenv("DATA_ROOT"),
+        batch_size=cfg["data"]["batch_size"],
         download=False,
     )
 
