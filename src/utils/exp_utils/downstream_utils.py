@@ -6,12 +6,12 @@ from src.trainers.cls_trainer import DownstreamMLPTrainer
 
 
 def evaluate_loaded_vae(
-    best_model, train_loader, valid_loader, test_loader, device, n_class=2
+    vae, train_loader, valid_loader, test_loader, device, n_class=2
 ):
-    best_model.to(device)
-    best_model.eval()
+    vae.to(device)
+    vae.eval()
 
-    for p in best_model.parameters():
+    for p in vae.parameters():
         p.requires_grad = False
     print("Calculating MLP input dimension...")
 
@@ -37,7 +37,7 @@ def evaluate_loaded_vae(
         x_dummy = torch.randn(1, 3, 96, 96).to(device)
 
     with torch.no_grad():
-        moments = best_model.encoder(x_dummy)
+        moments = vae.encoder(x_dummy)
 
         c = moments.shape[1] // 2
         h, w = moments.shape[2], moments.shape[3]
@@ -57,7 +57,7 @@ def evaluate_loaded_vae(
     optimizer = torch.optim.Adam(mlp.parameters(), lr=3e-4)
     criterion = nn.CrossEntropyLoss()
 
-    trainer = DownstreamMLPTrainer(best_model, mlp, optimizer, criterion, 1, device)
+    trainer = DownstreamMLPTrainer(vae, mlp, optimizer, criterion, 1, device)
 
     print("Training downstream MLP classifier...")
     trainer.fit(1, train_loader, valid_loader)
