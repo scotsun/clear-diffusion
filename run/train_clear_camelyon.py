@@ -1,19 +1,13 @@
-import os
 import sys
 from pathlib import Path
-import json
-
 import argparse
 import torch
 import mlflow
 import numpy as np
-import matplotlib.pyplot as plt
 
-from tqdm import tqdm
 from mlflow.types import Schema, TensorSpec
 from mlflow.models import ModelSignature
 
-from sklearn.manifold import TSNE
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
