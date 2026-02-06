@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 import argparse
 import torch
+import torch.nn as nn
 import mlflow
 
 from setproctitle import setproctitle
@@ -14,10 +15,13 @@ from mlflow.models import ModelSignature
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.sd_vae.ae import VAE
+from src.trainers.cls_trainer import DownstreamMLPTrainer
+from src.utils.exp_utils.downstream_utils import get_flatten_dim
 from src.utils.exp_utils.train_utils import (
     load_cfg,
     setup_training,
     build_first_stage_trainer,
+    build_cls_trainer,
     xavier_init,
 )
 from src.utils.data_utils.camelyon import build_dataloader
@@ -59,13 +63,25 @@ def main():
 
     # load model
     run_id, model_name = cfg["vae"]["run_id"], cfg["vae"]["model_name"]
-    vae = mlflow.pytorch.load_model(
+    vae: nn.Module = mlflow.pytorch.load_model(
         f"runs:/{run_id}/{model_name}",
         map_location=device,
         dst_path="./tmp",
     )
     # cls_model
+    cls_in_dim = get_flatten_dim(
+        vae=vae,
+        img_size=cfg["data"]["img_size"],
+        channel=cfg["data"]["content_channel"],
+    )
+    cls_model = nn.Sequential(
+        nn.Linear(cls_in_dim, cfg["cls_model"]["hidden_dim"]),
+        nn.ReLU(),
+        nn.Linear(cfg["cls_model"]["hidden_dim"], cfg["cls_model"]["out_dim"]),
+    ).to(device)
 
+    # trainer
+    # trainer =
     # TODO: ddp both modules
 
 

@@ -2,11 +2,19 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+from src.sd_vae.ae import VAE
 from src.trainers.cls_trainer import DownstreamMLPTrainer
 
 
+def get_flatten_dim(vae: VAE, img_size: int, channel: int):
+    enc = vae.encoder
+    n_downsample = enc.n_resolutions - 1
+    h_size = img_size // (2**n_downsample)
+    return channel * h_size * h_size
+
+
 def evaluate_loaded_vae(
-    vae, train_loader, valid_loader, test_loader, device, n_class=2
+    vae: VAE, train_loader, valid_loader, test_loader, device, n_class=2
 ):
     vae.to(device)
     vae.eval()

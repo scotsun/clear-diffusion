@@ -44,6 +44,7 @@ class Encoder(nn.Module):
         self.mid = build_midblock(channels, norm_channels, n_heads)
         self.norm = nn.GroupNorm(norm_channels, channels)
         self.conv_out = nn.Conv2d(channels, 2 * z_channels, kernel_size=3, padding=1)
+        # 2 * z_channels for mu and logvar
 
     def forward(self, x: torch.Tensor):
         h = self.conv_in(x)

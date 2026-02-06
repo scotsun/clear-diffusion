@@ -247,7 +247,6 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
         vae.train()
         opt = self.opts["vae_opt"]
         device = self.device
-        scaler = self.scaler
 
         channel_split = self.args["channel_split"]
         beta = self.args["beta"]
@@ -261,47 +260,45 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
                     x = self.transform(x)
                 opt.zero_grad()
 
-                with autocast(device_type="cuda", dtype=torch.float16):
-                    xhat, posterior = vae(x)
-                    z_c, z_s = posterior.sample().split_with_sizes(channel_split, dim=1)
+                xhat, posterior = vae(x)
+                z_c, z_s = posterior.sample().split_with_sizes(channel_split, dim=1)
 
-                    rec_loss = (
-                        F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3)).mean()
-                    )
-                    kl_loss = posterior.kl().mean()
-                    con_loss = self.contrastive_criterions["global"]["content"](
+                rec_loss = (
+                    F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3)).mean()
+                )
+                kl_loss = posterior.kl().mean()
+                con_loss = self.contrastive_criterions["global"]["content"](
+                    z_c, y
+                ).mean()
+                ps_loss = self.contrastive_criterions["global"]["style"](
+                    z_s, y, ps=True
+                ).mean()
+
+                if "dense" in self.contrastive_criterions:
+                    dense_con_loss = self.contrastive_criterions["dense"]["content"](
                         z_c, y
                     ).mean()
-                    ps_loss = self.contrastive_criterions["global"]["style"](
+                    dense_ps_loss = self.contrastive_criterions["dense"]["style"](
                         z_s, y, ps=True
                     ).mean()
+                    loss = loss = (
+                        rec_loss
+                        + beta * kl_loss
+                        + gamma_c * (0.5 * con_loss + 0.5 * dense_con_loss)
+                        + gamma_s * (0.5 * ps_loss + 0.5 * dense_ps_loss)
+                    )
+                else:
+                    dense_con_loss = torch.tensor(0.0, device=device)
+                    dense_ps_loss = torch.tensor(0.0, device=device)
+                    loss = (
+                        rec_loss
+                        + beta * kl_loss
+                        + gamma_c * con_loss
+                        + gamma_s * ps_loss
+                    )
 
-                    if "dense" in self.contrastive_criterions:
-                        dense_con_loss = self.contrastive_criterions["dense"][
-                            "content"
-                        ](z_c, y).mean()
-                        dense_ps_loss = self.contrastive_criterions["dense"]["style"](
-                            z_s, y, ps=True
-                        ).mean()
-                        loss = loss = (
-                            rec_loss
-                            + beta * kl_loss
-                            + gamma_c * (0.5 * con_loss + 0.5 * dense_con_loss)
-                            + gamma_s * (0.5 * ps_loss + 0.5 * dense_ps_loss)
-                        )
-                    else:
-                        dense_con_loss = torch.tensor(0.0, device=device)
-                        dense_ps_loss = torch.tensor(0.0, device=device)
-                        loss = (
-                            rec_loss
-                            + beta * kl_loss
-                            + gamma_c * con_loss
-                            + gamma_s * ps_loss
-                        )
-
-                scaler.scale(loss).backward()
-                scaler.step(opt)
-                scaler.update()
+                loss.backward()
+                opt.step()
 
                 bar.set_postfix(
                     rec_loss=rec_loss.item(),

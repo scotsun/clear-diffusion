@@ -4,6 +4,7 @@ from pathlib import Path
 import argparse
 import torch
 import mlflow
+import torch.distributed as dist
 import numpy as np
 
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -113,3 +114,11 @@ def main():
         best_model,
         img_size=96,
     )
+
+    # end
+    if is_distributed:
+        dist.destroy_process_group()
+
+
+if __name__ == "__main__":
+    main()

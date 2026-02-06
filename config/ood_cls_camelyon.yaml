@@ -12,5 +12,11 @@ train:
 trainer_param:
   cls_lr: 0.0003
 vae:
+  channel_split:
+  - 4
+  - 8
   run_id: null
   model_name: null
+cls_model:
+  hidden_dim: 256
+  out_dim: 2
