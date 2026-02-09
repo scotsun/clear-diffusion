@@ -29,10 +29,8 @@ from src.utils.data_utils.camelyon import build_dataloader
 
 def get_args():
     parser = argparse.ArgumentParser(description="OOD CLS on Camelyon")
-    parser.add_argument("--config", type=str, default="./config/ood_cls_camelyon.yaml")
+    parser.add_argument("--config", type=str, default="ood_cls_camelyon")
     parser.add_argument("--backend-uri", type=str, default="./mlruns")
-    parser.add_argument("--experiment-name", type=str)
-    parser.add_argument("--run-name", type=str, default=None)
     args = parser.parse_args()
     return args
 
@@ -40,10 +38,11 @@ def get_args():
 def main():
     load_dotenv()
     args = get_args()
-    cfg = load_cfg(args.config)
     MLFLOW_URI = args.backend_uri
-    EXPERIMENT_NAME = args.experiment_name
-    RUN_NAME = args.run_name
+
+    cfg = load_cfg(f"./config/{args.config}.yaml")
+    experiment_name = cfg["mlflow"]["experiment_name"]
+    run_name = cfg["mlflow"]["run_name"]
 
     # set multi-gpu
     os.environ["OMP_NUM_THREADS"] = "1"
@@ -103,8 +102,8 @@ def main():
 
     # train
     mlflow.set_tracking_uri(MLFLOW_URI)
-    mlflow.set_experiment(EXPERIMENT_NAME)
-    with mlflow.start_run(run_name=RUN_NAME):
+    mlflow.set_experiment(experiment_name)
+    with mlflow.start_run(run_name=run_name):
         mlflow.log_params(cfg["cls_model"] | cfg["trainer_param"])
         trainer.fit(
             epochs=cfg["train"]["epochs"],

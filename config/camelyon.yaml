@@ -1,6 +1,6 @@
 mlflow:
-  run_name: clear-camelyon-0
   experiment_name: clear-camelyon
+  run_name: test0
 data:
   batch_size: 64
   data_root: /hpc/group/engelhardlab/ms1008/image_data

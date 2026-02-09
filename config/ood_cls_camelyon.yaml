@@ -1,6 +1,6 @@
 mlflow:
-  run_name: clear-camelyon-0
-  experiment_name: clear-camelyon
+  run_name: camelyon-ood-cls
+  experiment_name: test0
 data:
   batch_size: 64
   img_size: 96

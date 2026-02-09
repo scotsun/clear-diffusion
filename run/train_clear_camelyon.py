@@ -32,18 +32,17 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="camelyon")
     parser.add_argument("--backend-uri", type=str, default="./mlruns")
-    parser.add_argument("--experiment-name", type=str)
-    parser.add_argument("--run-name", type=str, default=None)
     return parser.parse_args()
 
 
 def main():
     load_dotenv()
     args = get_args()
-    cfg = load_cfg(f"./config/{args.config}.yaml")
     MLFLOW_URI = args.backend_uri
-    EXPERIMENT_NAME = args.experiment_name
-    RUN_NAME = args.run_name
+
+    cfg = load_cfg(f"./config/{args.config}.yaml")
+    experiment_name = cfg["mlflow"]["experiment_name"]
+    run_name = cfg["mlflow"]["run_name"]
 
     # set multi-gpu
     os.environ["OMP_NUM_THREADS"] = "1"
@@ -88,8 +87,8 @@ def main():
 
     # train
     mlflow.set_tracking_uri(MLFLOW_URI)
-    mlflow.set_experiment(EXPERIMENT_NAME)
-    with mlflow.start_run(run_name=RUN_NAME) as run:
+    mlflow.set_experiment(experiment_name)
+    with mlflow.start_run(run_name=run_name) as run:
         mlflow.log_params(cfg["vae"] | cfg["trainer_param"])
         trainer.fit(
             epochs=cfg["train"]["epochs"],
