@@ -48,7 +48,7 @@ def main():
     # set multi-gpu
     os.environ["OMP_NUM_THREADS"] = "1"
     local_rank, world_size, rank, device, is_distributed = setup_training()
-    setproctitle(f"ood-cls-camelyon-{local_rank}")
+    setproctitle(f"train-clear-camelyon-{local_rank}")
     print(f"local_rank: {local_rank}")
     print(f"process {rank}/{world_size} using device {device}\n")
 
@@ -84,7 +84,7 @@ def main():
         device=device,
     )
     if is_distributed:
-        trainer.model = DDP(trainer.model, device_ids=[rank])
+        trainer.model = DDP(trainer.model, device_ids=[local_rank])
 
     # train
     mlflow.set_tracking_uri(MLFLOW_URI)
@@ -106,13 +106,13 @@ def main():
     z_c, z_s = posterior.mu.split_with_sizes(
         cfg["trainer_param"]["channel_split"], dim=1
     )
-    select = torch.randint(0, 32, (5,)).tolist()
+    select = torch.randint(0, x.shape[0], (5,)).tolist()
     feature_swapping_plot(
         z_c[select],
         z_s[select],
         x[select],
         best_model,
-        img_size=96,
+        img_size=img_size,
     )
 
     # end

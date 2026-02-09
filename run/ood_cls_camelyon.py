@@ -5,6 +5,8 @@ import argparse
 import torch.nn as nn
 import numpy as np
 import mlflow
+import torch.distributed as dist
+
 
 from torch.nn.parallel import DistributedDataParallel as DDP
 from setproctitle import setproctitle
@@ -97,7 +99,7 @@ def main():
         device=device,
     )
     if is_distributed:
-        trainer.model = DDP(trainer.model, device_ids=[rank])
+        trainer.model = DDP(trainer.model, device_ids=[local_rank])
 
     # train
     mlflow.set_tracking_uri(MLFLOW_URI)
@@ -113,6 +115,10 @@ def main():
     # test
     test_rlt = trainer.evaluate(dataloader=dataloaders["test"], verbose=True)
     print(test_rlt)
+
+    # end
+    if is_distributed:
+        dist.destroy_process_group()
 
 
 if __name__ == "__main__":
