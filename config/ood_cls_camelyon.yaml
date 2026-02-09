@@ -4,6 +4,7 @@ mlflow:
 data:
   batch_size: 64
   img_size: 96
+  n_class: 2
   name: camelyon
 out_dir: ./out/camelyon
 train:
@@ -11,10 +12,10 @@ train:
   epochs: 31
 trainer_param:
   cls_lr: 0.0003
-vae:
   channel_split:
   - 4
   - 8
+vae:
   run_id: null
   model_name: null
 cls_model:

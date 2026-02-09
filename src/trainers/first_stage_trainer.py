@@ -45,13 +45,13 @@ class VAEFirstStageTrainer(Trainer):
 
     def _configure_opts(self, args: dict):
         if self.discriminator is None:
-            vae_opt = optim.Adam(self.model.parameters(), lr=args["vae_lr"])
+            vae_opt = optim.AdamW(self.model.parameters(), lr=args["vae_lr"])
             return {"vae_opt": vae_opt}
         else:
-            vae_opt = optim.Adam(
+            vae_opt = optim.AdamW(
                 list(self.model.parameters()) + [self.logvar], lr=args["vae_lr"]
             )
-            disc_opt = optim.Adam(self.discriminator.parameters(), lr=args["disc_lr"])
+            disc_opt = optim.AdamW(self.discriminator.parameters(), lr=args["disc_lr"])
             return (
                 {"vae_opt": vae_opt, "disc_opt": disc_opt}
                 if self.discriminator
@@ -239,7 +239,7 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
                 self.contrastive_criterions["dense"]["content"].parameters()
             ) + list(self.contrastive_criterions["dense"]["style"].parameters())
 
-        vae_opt = optim.AdamW(param_list, lr=args["vae_lr"])
+        vae_opt = optim.AdamWW(param_list, lr=args["vae_lr"])
         self.opts = {"vae_opt": vae_opt}
 
     def _train(self, dataloader: DataLoader, verbose: bool, epoch_id: int):

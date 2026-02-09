@@ -58,7 +58,7 @@ def build_first_stage_trainer(cfg, trainer_class, model, signature, device):
     return trainer
 
 
-def build_cls_trainer(cfg, trainer_class, model, signature, device):
+def build_cls_trainer(cfg, trainer_class, model, vae, signature, device):
     match trainer_class:
         case "DownstreamMLPTrainer":
             trainer_class = DownstreamMLPTrainer
@@ -66,6 +66,7 @@ def build_cls_trainer(cfg, trainer_class, model, signature, device):
             raise ValueError(f"Unknown trainer class: {trainer_class}")
     trainer = trainer_class(
         model=model,
+        vae=vae,
         early_stopping=EarlyStopping(cfg["train"]["early_stopping_patience"]),
         verbose_period=2,
         device=device,

@@ -62,7 +62,7 @@ def evaluate_loaded_vae(
         nn.Linear(256, n_class),
     ).to(device)
 
-    optimizer = torch.optim.Adam(mlp.parameters(), lr=3e-4)
+    optimizer = torch.optim.AdamW(mlp.parameters(), lr=3e-4)
     criterion = nn.CrossEntropyLoss()
 
     trainer = DownstreamMLPTrainer(vae, mlp, optimizer, criterion, 1, device)

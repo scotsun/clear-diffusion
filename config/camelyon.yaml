@@ -11,7 +11,7 @@ train:
   early_stopping_patience: 5
   epochs: 31
 trainer_param:
-  beta: 0.1
+  beta: 0.05
   channel_split:
   - 4
   - 8

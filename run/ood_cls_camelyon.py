@@ -2,10 +2,11 @@ import os
 import sys
 from pathlib import Path
 import argparse
-import torch
 import torch.nn as nn
+import numpy as np
 import mlflow
 
+from torch.nn.parallel import DistributedDataParallel as DDP
 from setproctitle import setproctitle
 from dotenv import load_dotenv
 from mlflow.types import Schema, TensorSpec
@@ -15,14 +16,11 @@ from mlflow.models import ModelSignature
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.sd_vae.ae import VAE
-from src.trainers.cls_trainer import DownstreamMLPTrainer
 from src.utils.exp_utils.downstream_utils import get_flatten_dim
 from src.utils.exp_utils.train_utils import (
     load_cfg,
     setup_training,
-    build_first_stage_trainer,
     build_cls_trainer,
-    xavier_init,
 )
 from src.utils.data_utils.camelyon import build_dataloader
 
@@ -61,9 +59,18 @@ def main():
         is_distributed=is_distributed,
     )
 
+    # data signature
+    img_size = cfg["data"]["img_size"]
+    n_class = cfg["data"]["n_class"]
+    input_schema = Schema(
+        [TensorSpec(np.dtype(np.float32), [-1, 1, img_size, img_size])]
+    )
+    output_schema = Schema([TensorSpec(np.dtype(np.float32), [-1, n_class])])
+    signature = ModelSignature(inputs=input_schema, outputs=output_schema)
+
     # load model
     run_id, model_name = cfg["vae"]["run_id"], cfg["vae"]["model_name"]
-    vae: nn.Module = mlflow.pytorch.load_model(
+    vae: VAE = mlflow.pytorch.load_model(
         f"runs:/{run_id}/{model_name}",
         map_location=device,
         dst_path="./tmp",
@@ -77,12 +84,35 @@ def main():
     cls_model = nn.Sequential(
         nn.Linear(cls_in_dim, cfg["cls_model"]["hidden_dim"]),
         nn.ReLU(),
-        nn.Linear(cfg["cls_model"]["hidden_dim"], cfg["cls_model"]["out_dim"]),
+        nn.Linear(cfg["cls_model"]["hidden_dim"], cfg["data"]["n_class"]),
     ).to(device)
 
     # trainer
-    # trainer =
-    # TODO: ddp both modules
+    trainer = build_cls_trainer(
+        cfg=cfg,
+        trainer_class="DownstreamMLPTrainer",
+        model=cls_model,
+        vae=vae,
+        signature=signature,
+        device=device,
+    )
+    if is_distributed:
+        trainer.model = DDP(trainer.model, device_ids=[rank])
+
+    # train
+    mlflow.set_tracking_uri(MLFLOW_URI)
+    mlflow.set_experiment(EXPERIMENT_NAME)
+    with mlflow.start_run(run_name=RUN_NAME) as run:
+        mlflow.log_params(cfg["cls_model"] | cfg["trainer_param"])
+        trainer.fit(
+            epochs=cfg["train"]["epochs"],
+            train_loader=dataloaders["train"],
+            valid_loader=dataloaders["valid"],
+        )
+
+    # test
+    test_rlt = trainer.evaluate(dataloader=dataloaders["test"], verbose=True)
+    print(test_rlt)
 
 
 if __name__ == "__main__":

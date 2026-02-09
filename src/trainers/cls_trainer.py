@@ -7,8 +7,10 @@ import mlflow
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from mlflow.models import ModelSignature
+from sklearn.metrics import roc_auc_score, average_precision_score
 
 from src.modules.distribution import IsotropicNormalDistribution
+from src.modules.metrics import accuracy_score
 from . import EarlyStopping, Trainer
 
 
@@ -36,52 +38,16 @@ class DownstreamMLPTrainer(Trainer):
         self.vae = vae
         self.args = args
         self.opts = {
-            "cls_opt": optim.Adam(model.parameters(), lr=args["cls_lr"]),
+            "cls_opt": optim.AdamW(model.parameters(), lr=args["cls_lr"]),
         }
+        self.ce = nn.CrossEntropyLoss()
 
-    def _unpack_batch(self, batch):
-        if isinstance(batch, dict):
-            if "x" in batch:
-                x = batch["x"]
-            elif "image" in batch:
-                x = batch["image"]
-            elif "data" in batch:
-                x = batch["data"]
-            else:
-                x = list(batch.values())[0]
-
-            if "y" in batch:
-                y = batch["y"]
-            elif "label" in batch:
-                y = batch["label"]
-            elif "target" in batch:
-                y = batch["target"]
-            else:
-                y = list(batch.values())[1]
-
-        elif isinstance(batch, (list, tuple)):
-            x, y = batch[0], batch[1]
-        else:
-            raise TypeError(f"Unsupported batch type: {type(batch)}")
-
-        return x, y
-
-    def _get_vae_feature(self, x):
-        moments = self.vae.encoder(x)
-
-        posterior = IsotropicNormalDistribution(moments)
-
-        if hasattr(posterior, "mean"):
-            z = posterior.mean
-        elif hasattr(posterior, "mode"):
-            z = posterior.mode()
-        else:
-            c = moments.shape[1] // 2
-            z = moments[:, :c, :, :]
-
-        z = z.reshape(z.shape[0], -1)
-
-        return z
+    @torch.no_grad()
+    def _get_content_feature(self, x: torch.Tensor):
+        posterior: IsotropicNormalDistribution = self.vae(x)[1]
+        z_feature, _ = posterior.mu.split_with_sizes(self.args["channel_split"], dim=1)
+        z_feature = z_feature.reshape(x.shape[0], -1)
+        return z_feature
 
     def _train(self, dataloader: DataLoader, verbose: bool, epoch_id: int):
         model: nn.Module = self.model
@@ -94,80 +60,58 @@ class DownstreamMLPTrainer(Trainer):
         with tqdm(dataloader, unit="batch", mininterval=0, disable=not verbose) as bar:
             bar.set_description(f"epoch {epoch_id}")
             for batch_id, batch in enumerate(bar):
+                cur_step = epoch_id * len(dataloader) + batch_id
+
                 x, y = batch["image"].to(device), batch["label"].to(device)
                 if self.transform:
                     x = self.transform(x)
 
-                ### TODO: make this a func
-                with torch.no_grad():
-                    _, posterior = vae(x)
-                    z_feature, _ = posterior.sample().split_with_sizes(
-                        self.args["channel_split"], dim=1
-                    )
-                    z_feature = z_feature.reshape(x.shape[0], -1)
-                #######################
+                z_feature = self._get_content_feature(x)
 
-                self.optimizer.zero_grad()
-
+                opt.zero_grad()
                 logits = self.model(z_feature)
-                loss = self.criterion(logits, y)
+                loss = self.ce(logits, y)
                 loss.backward()
-                self.optimizer.step()
-                bar.set_postfix(loss=float(loss))
+                opt.step()
 
-    def _valid(self, dataloader: DataLoader, verbose: bool, epoch_id: int):
-        if verbose:
-            (aupr_scores, auroc_scores), acc = self.evaluate(
-                dataloader, verbose, epoch_id
-            )
-            print(f"val_acc: {acc:.3f}")
+                metrics = {"ce_loss": loss.item()}
+
+                # update progress bar
+                bar.set_postfix(metrics)
+                if cur_step % 10 == 0:
+                    mlflow.log_metrics(metrics, step=cur_step)
+        return
 
     @torch.no_grad()
     def evaluate(self, dataloader: DataLoader, verbose: bool, epoch_id: int):
         self.model.eval()
+        device = self.device
+
         all_y = []
         all_probs = []
-        groups = []
-
+        all_groups = []
         with tqdm(dataloader, unit="batch", mininterval=0, disable=not verbose) as bar:
             for batch in bar:
-                pass
-        #         x, y = self._unpack_batch(batch)
+                x, y, groups = (
+                    batch["image"].to(device),
+                    batch["label"].to(device),
+                    batch["style"],
+                )
+                z_feature = self._get_content_feature(x)
+                logits = self.model(z_feature)
+                probs = torch.softmax(logits, dim=1)
+                all_y.append(y.cpu())
+                all_probs.append(probs.cpu())
+                all_groups.append(groups.cpu())
 
-        #         g_batch = None
-        #         if isinstance(batch, dict):
-        #             if "c" in batch:
-        #                 g_batch = batch["c"]
-        #             elif "group" in batch:
-        #                 g_batch = batch["group"]
-        #         elif isinstance(batch, (list, tuple)) and len(batch) > 2:
-        #             g_batch = batch[2]
-        #         if g_batch is not None:
-        #             groups.append(g_batch.cpu().numpy())
+        all_y = torch.cat(all_y)
+        all_probs = torch.cat(all_probs)
+        all_groups = torch.cat(all_groups)
 
-        #         y = y.reshape(-1)
-        #         x = x.to(self.device)
-
-        #         z_feature = self._get_vae_feature(x)
-
-        #         logits = self.model(z_feature)
-        #         probs = torch.softmax(logits, dim=1)
-
-        #         all_y.append(y.cpu())
-        #         all_probs.append(probs.cpu())
-
-        #     all_y = torch.cat(all_y).numpy()
-        #     all_probs = torch.cat(all_probs).numpy()
-
-        #     if len(groups) > 0:
-        #         groups = np.concatenate(groups)
-        #     else:
-        #         groups = np.zeros_like(all_y)
-
-        #     acc = accuracy_score(all_y, np.argmax(all_probs, axis=1))
-        #     aupr_scores = {}
-        #     auroc_scores = {}
-
+        acc = accuracy_score(all_y, torch.argmax(all_probs, axis=1))
+        auroc = roc_auc_score(all_y, all_probs[:, 1])
+        ap = average_precision_score(all_y, all_probs[:, 1])
+        return acc, auroc, ap
         #     unique_groups = np.unique(groups)
         #     for g in unique_groups:
         #         mask = groups == g
@@ -186,8 +130,21 @@ class DownstreamMLPTrainer(Trainer):
         #         k = f"group_{g}" if isinstance(g, (int, np.integer)) else str(g)
         #         auroc_scores[k] = float(auroc)
         #         aupr_scores[k] = float(aupr)
-
         # return (aupr_scores, auroc_scores), acc
+
+    def _valid(self, dataloader: DataLoader, verbose: bool, epoch_id: int):
+        acc, auroc, ap = self.evaluate(dataloader, verbose, epoch_id)
+        if verbose:
+            print(f"val_acc: {acc:.4f}, val_auroc: {auroc:.4f}, val_ap: {ap:.4f}")
+        valid_metrics = {
+            "callback_metric": auroc,
+            "logged_metric": {
+                "val_acc": acc,
+                "val_auroc": auroc,
+                "val_ap": ap,
+            },
+        }
+        return valid_metrics
 
 
 class DownstreamLAMTrainer:
