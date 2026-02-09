@@ -102,7 +102,7 @@ def main():
     # train
     mlflow.set_tracking_uri(MLFLOW_URI)
     mlflow.set_experiment(EXPERIMENT_NAME)
-    with mlflow.start_run(run_name=RUN_NAME) as run:
+    with mlflow.start_run(run_name=RUN_NAME):
         mlflow.log_params(cfg["cls_model"] | cfg["trainer_param"])
         trainer.fit(
             epochs=cfg["train"]["epochs"],
