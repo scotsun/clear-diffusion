@@ -30,7 +30,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default="./config/camelyon.yaml")
+    parser.add_argument("--config", type=str, default="camelyon")
     parser.add_argument("--backend-uri", type=str, default="./mlruns")
     parser.add_argument("--experiment-name", type=str)
     parser.add_argument("--run-name", type=str, default=None)
@@ -40,7 +40,7 @@ def get_args():
 def main():
     load_dotenv()
     args = get_args()
-    cfg = load_cfg(args.config)
+    cfg = load_cfg(f"./config/{args.config}.yaml")
     MLFLOW_URI = args.backend_uri
     EXPERIMENT_NAME = args.experiment_name
     RUN_NAME = args.run_name
