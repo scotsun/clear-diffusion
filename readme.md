@@ -2,6 +2,10 @@
 - [ ] rec_loss -> nll_loss rationalization (Kendall-Gal, 2018)
 
 
+###
+
+container image: `/opt/apps/containers/community/fm101/diffusion-image.sif`
+
 ### CMD
 
 ```sh
