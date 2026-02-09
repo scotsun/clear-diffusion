@@ -2,7 +2,7 @@ mlflow:
   experiment_name: clear-camelyon
   run_name: test0
 data:
-  batch_size: 64
+  batch_size: 128
   data_root: /hpc/group/engelhardlab/ms1008/image_data
   img_size: 96
   name: camelyon
