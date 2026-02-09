@@ -9,7 +9,7 @@ container image: `/opt/apps/containers/community/fm101/diffusion-image.sif`
 ### CMD
 
 ```sh
-torchrun --nproc-per-node 2 run/train_clear_camelyon.py --config camelyon --experiment-name test01 --run-name test-ddp
+torchrun --nproc-per-node 2 run/train_clear_camelyon.py --config camelyon
 ```
 
 ### [MNIST-C](https://github.com/google-research/mnist-c) module `corrpution_utils`
