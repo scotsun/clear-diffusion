@@ -56,7 +56,7 @@ def main():
         data_root=os.getenv("CAMELYON_DATA_ROOT"),
         batch_size=cfg["data"]["batch_size"],
         download=False,
-        num_workers=16,
+        num_workers=8,
         is_distributed=is_distributed,
     )
 
