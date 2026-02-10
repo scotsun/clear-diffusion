@@ -389,6 +389,6 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
         logged_metric = {f"val_{k}": v for k, v in val_losses.items()}
         valid_metrics = {
             "callback_metric": val_rec,
-            "logged_metric": logged_metric,
+            "logged_metrics": logged_metric,
         }
         return valid_metrics
