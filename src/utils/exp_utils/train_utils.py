@@ -32,7 +32,7 @@ def _broadcast_bool(flag: bool, device: torch.device) -> bool:
     """
     if not _dist_is_initialized():
         return flag
-    flag_tensor = torch.tensor([1 if flag else 0], device=device, dtype=torch.int16)
+    flag_tensor = torch.tensor([1 if flag else 0], device=device, dtype=torch.long)
     dist.broadcast(flag_tensor, src=0)
     return bool(flag_tensor.item())
 
