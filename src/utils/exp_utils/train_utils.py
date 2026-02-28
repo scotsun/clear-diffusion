@@ -5,11 +5,48 @@ import torch.nn as nn
 import torch.nn.init as init
 import torch.distributed as dist
 
+from torch.nn.parallel import DistributedDataParallel as DDP
 from datetime import timedelta
 
 from src.trainers import EarlyStopping
 from src.trainers.first_stage_trainer import CLEAR_VAEFirstStageTrainer
 from src.trainers.cls_trainer import DownstreamMLPTrainer
+
+
+def _dist_is_initialized():
+    return dist.is_available() and dist.is_initialized()
+
+
+def _is_main_process():
+    return not _dist_is_initialized() or dist.get_rank() == 0
+
+
+def _get_module(model: nn.Module | DDP) -> nn.Module:
+    return model.module if isinstance(model, DDP) else model
+
+
+def _broadcast_bool(flag: bool, device: torch.device) -> bool:
+    """
+    single gpu: return the flag as is
+    ddp: broadcast the flag from rank 0 to all other ranks, and return the broadcasted flag
+    """
+    if not _dist_is_initialized():
+        return flag
+    flag_tensor = torch.tensor([1 if flag else 0], device=device, dtype=torch.int16)
+    dist.broadcast(flag_tensor, src=0)
+    return bool(flag_tensor.item())
+
+
+def _broadcast_float(value: float, device: torch.device) -> float:
+    """
+    single gpu: return the value as is
+    ddp: broadcast the value from rank 0 to all other ranks, and return the
+    """
+    if not _dist_is_initialized():
+        return value
+    value_tensor = torch.tensor([value], device=device, dtype=torch.float32)
+    dist.broadcast(value_tensor, src=0)
+    return float(value_tensor.item())
 
 
 def load_cfg(cfg_path) -> dict:
