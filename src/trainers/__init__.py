@@ -32,6 +32,11 @@ class EarlyStopping:
         min_delta: float = 0.0,
         save_best_weights: bool = True,
     ) -> None:
+        if mode not in ["min", "max"]:
+            raise ValueError("mode must be either `min` or `max`")
+        if patience < 1:
+            raise ValueError("patience must be at least 1")
+
         self.patience = patience
         self.mode = mode
         self.min_delta = min_delta
@@ -58,7 +63,7 @@ class EarlyStopping:
         model: nn.Module | DDP,
         epoch: int,
         device: torch.device,
-    ):
+    ) -> tuple[bool, bool]:
         if _is_main_process():
             improved = False
             if self.best_score is None or self._is_better(metric_val, self.best_score):
