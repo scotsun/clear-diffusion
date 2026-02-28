@@ -52,10 +52,8 @@ class EarlyStopping:
     def _is_better(self, current: float, best: float) -> bool:
         if self.mode == "min":
             return current < best - self.min_delta
-        elif self.mode == "max":
+        else:  # "max"
             return current > best + self.min_delta
-        else:
-            raise ValueError("mode must be either `min` or `max`")
 
     def step(
         self,
