@@ -19,9 +19,9 @@ from src.sd_vae.ae import VAE
 from src.utils.exp_utils.train_utils import (
     load_cfg,
     build_first_stage_trainer,
-    setup_training,
     xavier_init,
 )
+from src.utils.exp_utils.dist_utils import setup_training
 from src.utils.exp_utils.visual import feature_swapping_plot
 from src.utils.data_utils.camelyon import build_dataloader
 

@@ -19,11 +19,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.sd_vae.ae import VAE
 from src.utils.exp_utils.downstream_utils import get_flatten_dim
-from src.utils.exp_utils.train_utils import (
-    load_cfg,
-    setup_training,
-    build_cls_trainer,
-)
+from src.utils.exp_utils.train_utils import load_cfg, build_cls_trainer
+from src.utils.exp_utils.dist_utils import setup_training
 from src.utils.data_utils.camelyon import build_dataloader
 
 

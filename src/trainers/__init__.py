@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from torch.utils.data import DataLoader
 from mlflow.models import ModelSignature
 
-from src.utils.exp_utils.train_utils import (
+from src.utils.exp_utils.dist_utils import (
     _is_main_process,
     _get_module,
     _broadcast_bool,
