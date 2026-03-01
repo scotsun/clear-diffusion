@@ -88,8 +88,6 @@ class VAEFirstStageTrainer(Trainer):
             for batch_id, batch in enumerate(bar):
                 cur_step = epoch_id * len(dataloader) + batch_id
                 x = batch["image"].to(device)
-                if self.transform:
-                    x = self.transform(x)
                 xhat, posterior = vae(x)
 
                 rec_loss = (
@@ -141,8 +139,6 @@ class VAEFirstStageTrainer(Trainer):
         with tqdm(dataloader, unit="batch", mininterval=0, disable=not verbose) as bar:
             for batch in bar:
                 x = batch["image"].to(device)
-                if self.transform:
-                    x = self.transform(x)
                 xhat, posterior = vae(x)
                 rec_loss = (
                     F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3)).mean()
@@ -252,8 +248,6 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
             bar.set_description(f"Epoch {epoch_id}")
             for batch_id, batch in enumerate(bar):
                 x, y = batch["image"].to(device), batch["label"].to(device)
-                if self.transform:
-                    x = self.transform(x)
                 opt.zero_grad()
 
                 xhat, posterior = vae(x)
@@ -338,9 +332,6 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
         with tqdm(dataloader, unit="batch", mininterval=0, disable=not verbose) as bar:
             for batch in bar:
                 x, y = batch["image"].to(device), batch["label"].to(device)
-                if self.transform:
-                    x = self.transform(x)
-
                 with autocast(device_type="cuda", dtype=torch.float16):
                     xhat, posterior = vae(x)
                     z_c, z_s = posterior.sample().split_with_sizes(channel_split, dim=1)

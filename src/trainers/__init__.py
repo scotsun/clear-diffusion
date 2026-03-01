@@ -3,7 +3,6 @@ import torch.nn as nn
 import mlflow
 import torch.distributed as dist
 
-from torch.optim import Optimizer
 from torch.nn.parallel import DistributedDataParallel as DDP
 from abc import ABC, abstractmethod
 from torch.utils.data import DataLoader
