@@ -379,3 +379,32 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
             "logged_metrics": logged_metric,
         }
         return valid_metrics
+
+
+class CLEAR_VAEFirstStageTrainerV2(CLEAR_VAEFirstStageTrainer):
+    def __init__(
+        self,
+        model: nn.Module,
+        early_stopping: EarlyStopping | None,
+        verbose_period: int,
+        device: torch.device,
+        model_signature: ModelSignature,
+        args: dict,
+    ) -> None:
+        super().__init__(
+            model,
+            early_stopping,
+            verbose_period,
+            device,
+            model_signature,
+            args,
+        )
+
+    def _train(self, dataloader: DataLoader, verbose: bool, epoch_id: int):
+        pass
+
+    def evaluate(self, dataloader, verbose):
+        pass
+
+    def _valid(self, dataloader, verbose, epoch_id):
+        pass
