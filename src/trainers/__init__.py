@@ -145,7 +145,7 @@ class Trainer(ABC):
         epochs: int,
         train_loader: DataLoader,
         valid_loader: DataLoader | None = None,
-        log_epoch_model_period: int = 5,
+        log_epoch_model_period: int = 10,
     ):
         if self.early_stopping and not valid_loader:
             raise ValueError("EarlyStopping must be accompanied by valid data.")

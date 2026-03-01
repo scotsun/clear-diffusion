@@ -399,6 +399,7 @@ class CLEAR_VAEFirstStageTrainerV2(CLEAR_VAEFirstStageTrainer):
             model_signature,
             args,
         )
+        # TODO: add perception reconstruction
 
     def _train(self, dataloader: DataLoader, verbose: bool, epoch_id: int):
         pass
