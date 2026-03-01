@@ -116,18 +116,18 @@ class Trainer(ABC):
     def __init__(
         self,
         model: nn.Module | DDP,
-        optimizer: Optimizer,
         early_stopping: EarlyStopping | None,
         verbose_period: int,
         device: torch.device,
         model_signature: ModelSignature,
+        args: dict,
     ) -> None:
         self.model: nn.Module | DDP = model
-        self.optimizer = optimizer
         self.early_stopping = early_stopping
         self.verbose_period = verbose_period
         self.device = device
         self.model_signature = model_signature
+        self.args = args
 
     def log_model(self, model_name: str = "best_model"):
         if not _is_main_process():
