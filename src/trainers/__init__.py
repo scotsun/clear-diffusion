@@ -133,7 +133,7 @@ class Trainer(ABC):
             return
         module = _get_module(self.model)
         mlflow.pytorch.log_model(
-            model_to_log=module,
+            pytorch_model=module,
             name=model_name,
             pip_requirements=["torch>=2.5"],
             signature=self.model_signature,
