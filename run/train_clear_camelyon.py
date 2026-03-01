@@ -25,8 +25,6 @@ from src.utils.exp_utils.dist_utils import setup_training
 from src.utils.exp_utils.visual import feature_swapping_plot
 from src.utils.data_utils.camelyon import build_dataloader
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
 
 def get_args():
     parser = argparse.ArgumentParser()
