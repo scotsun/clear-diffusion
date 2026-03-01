@@ -25,7 +25,6 @@ class VAEFirstStageTrainer(Trainer):
         device: torch.device,
         model_signature: ModelSignature,
         args: dict,
-        transform=None,
     ) -> None:
         super().__init__(
             model,
@@ -34,7 +33,6 @@ class VAEFirstStageTrainer(Trainer):
             device,
             model_signature,
             args,
-            transform,
         )
         # TODO: add lpips
         self.discriminator = discriminator.to(device) if discriminator else None
@@ -181,7 +179,6 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
         device: torch.device,
         model_signature: ModelSignature,
         args: dict,
-        transform=None,
     ) -> None:
         super().__init__(
             model,
@@ -190,7 +187,6 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
             device,
             model_signature,
             args,
-            transform,
         )
         self._configure_contrastive_criterion(args)
         self._configure_opts(args)
