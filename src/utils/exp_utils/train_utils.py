@@ -32,7 +32,7 @@ def _broadcast_bool(flag: bool, device: torch.device) -> bool:
     """
     if not _dist_is_initialized():
         return flag
-    flag_tensor = torch.tensor([1 if flag else 0], device=device, dtype=torch.long)
+    flag_tensor = torch.tensor([1 if flag else 0], device=device, dtype=torch.int32)
     dist.broadcast(flag_tensor, src=0)
     return bool(flag_tensor.item())
 
@@ -40,7 +40,7 @@ def _broadcast_bool(flag: bool, device: torch.device) -> bool:
 def _broadcast_float(value: float, device: torch.device) -> float:
     """
     single gpu: return the value as is
-    ddp: broadcast the value from rank 0 to all other ranks, and return the
+    ddp: broadcast the value from rank 0 to all other ranks, and return the broadcasted value
     """
     if not _dist_is_initialized():
         return value
