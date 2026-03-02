@@ -16,6 +16,7 @@ dataloaders = build_dataloader(
     batch_size=32,
     download=False,
     num_workers=10,
+    is_distributed=False,
 )
 
 run_id = "359962abd2384324889a0ae928ddf45e"
