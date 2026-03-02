@@ -111,7 +111,9 @@ def main():
         )
 
     # test
-    test_rlt = trainer.evaluate(dataloader=dataloaders["test"], verbose=True)
+    test_rlt = trainer.evaluate(
+        dataloader=dataloaders["test"], verbose=True, epoch_id=0
+    )
     print(test_rlt)
 
     # end
