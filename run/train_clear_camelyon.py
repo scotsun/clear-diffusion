@@ -2,7 +2,6 @@ import os
 import sys
 from pathlib import Path
 import argparse
-import torch
 import mlflow
 import torch.distributed as dist
 import numpy as np
@@ -22,7 +21,6 @@ from src.utils.exp_utils.train_utils import (
     xavier_init,
 )
 from src.utils.exp_utils.dist_utils import setup_training
-from src.utils.exp_utils.visual import feature_swapping_plot
 from src.utils.data_utils.camelyon import build_dataloader
 
 
@@ -86,7 +84,7 @@ def main():
     # train
     mlflow.set_tracking_uri(MLFLOW_URI)
     mlflow.set_experiment(experiment_name)
-    with mlflow.start_run(run_name=run_name) as run:
+    with mlflow.start_run(run_name=run_name):
         mlflow.log_params(cfg["vae"] | cfg["trainer_param"])
         trainer.fit(
             epochs=cfg["train"]["epochs"],
