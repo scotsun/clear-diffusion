@@ -94,28 +94,6 @@ def main():
             valid_loader=dataloaders["valid"],
         )
 
-    # eval
-    x = next(iter(dataloaders["test"]))["image"].to(device)
-    best_model = mlflow.pytorch.load_model(
-        f"runs:/{run.info.run_id}/best_model",
-        map_location=device,
-        dst_path="./tmp",
-    )
-    with torch.no_grad():
-        best_model.eval()
-        _, posterior = best_model(x)
-    z_c, z_s = posterior.mu.split_with_sizes(
-        cfg["trainer_param"]["channel_split"], dim=1
-    )
-    select = torch.randint(0, x.shape[0], (5,)).tolist()
-    feature_swapping_plot(
-        z_c[select],
-        z_s[select],
-        x[select],
-        best_model,
-        img_size=img_size,
-    )
-
     # end
     if is_distributed:
         dist.destroy_process_group()
