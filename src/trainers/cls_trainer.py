@@ -61,8 +61,6 @@ class DownstreamMLPTrainer(Trainer):
                 cur_step = epoch_id * len(dataloader) + batch_id
 
                 x, y = batch["image"].to(device), batch["label"].to(device)
-                if self.transform:
-                    x = self.transform(x)
 
                 z_feature = self._get_content_feature(x)
 
@@ -93,7 +91,7 @@ class DownstreamMLPTrainer(Trainer):
                 x, y, groups = (
                     batch["image"].to(device),
                     batch["label"].to(device),
-                    batch["style"],
+                    batch["style"].to(device),
                 )
                 z_feature = self._get_content_feature(x)
                 logits = self.model(z_feature)
