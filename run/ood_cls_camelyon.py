@@ -71,6 +71,10 @@ def main():
         map_location=device,
         dst_path="./tmp",
     )
+    vae.eval()
+    for p in vae.parameters():
+        p.requires_grad = False
+
     # cls_model
     cls_in_dim = get_flatten_dim(
         vae=vae,
