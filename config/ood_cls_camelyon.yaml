@@ -10,6 +10,7 @@ data:
 out_dir: ./out/camelyon
 train:
   early_stopping_patience: 5
+  early_stopping_mode: min
   epochs: 31
 trainer_param:
   cls_lr: 0.0003
