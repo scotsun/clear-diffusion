@@ -96,7 +96,11 @@ def main():
 
     # eval
     x = next(iter(dataloaders["test"]))["image"].to(device)
-    best_model = mlflow.pytorch.load_model(f"runs:/{run.info.run_id}/best_model")
+    best_model = mlflow.pytorch.load_model(
+        f"runs:/{run.info.run_id}/best_model",
+        map_location=device,
+        dst_path="./tmp",
+    )
     with torch.no_grad():
         best_model.eval()
         _, posterior = best_model(x)
