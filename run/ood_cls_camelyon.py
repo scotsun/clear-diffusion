@@ -75,7 +75,7 @@ def main():
     cls_in_dim = get_flatten_dim(
         vae=vae,
         img_size=cfg["data"]["img_size"],
-        channel=cfg["data"]["content_channel"],
+        channel=cfg["data"]["content_channels"],
     )
     cls_model = nn.Sequential(
         nn.Linear(cls_in_dim, cfg["cls_model"]["hidden_dim"]),

@@ -6,6 +6,7 @@ data:
   img_size: 96
   n_class: 2
   name: camelyon
+  content_channels: 4
 out_dir: ./out/camelyon
 train:
   early_stopping_patience: 5
