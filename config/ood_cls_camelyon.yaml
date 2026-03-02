@@ -17,8 +17,8 @@ trainer_param:
   - 4
   - 8
 vae:
-  run_id: null
-  model_name: null
+  run_id: 359962abd2384324889a0ae928ddf45e
+  model_name: best_model
 cls_model:
   hidden_dim: 256
   out_dim: 2
