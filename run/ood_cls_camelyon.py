@@ -112,11 +112,11 @@ def main():
             valid_loader=dataloaders["valid"],
         )
         # test
-        test_rlt = trainer.evaluate(
+        test_acc, _, _ = trainer.evaluate(
             dataloader=dataloaders["test"], verbose=True, epoch_id=0
         )
-        mlflow.log_metrics(test_rlt["logged_metrics"])
-        print(test_rlt)
+        mlflow.log_metric("test_acc", test_acc)
+        print(f"Test Accuracy: {test_acc:.4f}")
 
     # end
     if is_distributed:
