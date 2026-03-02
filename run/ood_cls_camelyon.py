@@ -99,22 +99,22 @@ def main():
     if is_distributed:
         trainer.model = DDP(trainer.model, device_ids=[local_rank])
 
-    # train
     mlflow.set_tracking_uri(MLFLOW_URI)
     mlflow.set_experiment(experiment_name)
     with mlflow.start_run(run_name=run_name):
+        # train
         mlflow.log_params(cfg["cls_model"] | cfg["trainer_param"])
         trainer.fit(
             epochs=cfg["train"]["epochs"],
             train_loader=dataloaders["train"],
             valid_loader=dataloaders["valid"],
         )
-
-    # test
-    test_rlt = trainer.evaluate(
-        dataloader=dataloaders["test"], verbose=True, epoch_id=0
-    )
-    print(test_rlt)
+        # test
+        test_rlt = trainer.evaluate(
+            dataloader=dataloaders["test"], verbose=True, epoch_id=0
+        )
+        mlflow.log_metrics(test_rlt["logged_metrics"])
+        print(test_rlt)
 
     # end
     if is_distributed:
