@@ -159,7 +159,7 @@ class VAEFirstStageTrainer(Trainer):
             print(f"epoch {epoch_id}/val_mse: {val_mse:.4f}")
         valid_metrics = {
             "callback_metric": val_mse,
-            "logged_metric": {
+            "logged_metrics": {
                 "val_mse": val_mse,
                 "val_kl": val_kl,
             },
@@ -374,10 +374,10 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
         if verbose:
             print(f"epoch {epoch_id}/val_rec: {val_rec:.4f}")
 
-        logged_metric = {f"val_{k}": v for k, v in val_losses.items()}
+        logged_metrics = {f"val_{k}": v for k, v in val_losses.items()}
         valid_metrics = {
             "callback_metric": val_rec,
-            "logged_metrics": logged_metric,
+            "logged_metrics": logged_metrics,
         }
         return valid_metrics
 

@@ -134,7 +134,7 @@ class DownstreamMLPTrainer(Trainer):
             print(f"val_acc: {acc:.4f}, val_auroc: {auroc:.4f}, val_ap: {ap:.4f}")
         valid_metrics = {
             "callback_metric": acc,
-            "logged_metric": {
+            "logged_metrics": {
                 "val_acc": acc,
                 "val_auroc": auroc,
                 "val_ap": ap,
