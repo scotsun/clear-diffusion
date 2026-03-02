@@ -24,7 +24,6 @@ class DownstreamMLPTrainer(Trainer):
         device: torch.device,
         model_signature: ModelSignature,
         args: dict,
-        transform=None,
     ) -> None:
         super().__init__(
             model,
@@ -33,7 +32,6 @@ class DownstreamMLPTrainer(Trainer):
             device,
             model_signature,
             args,
-            transform,
         )
         self.vae = vae
         self.args = args
