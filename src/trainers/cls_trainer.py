@@ -10,6 +10,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 
 from src.modules.distribution import IsotropicNormalDistribution
 from src.modules.metrics import accuracy_score
+from src.utils.exp_utils.dist_utils import _is_main_process
 from . import EarlyStopping, Trainer
 
 
@@ -77,7 +78,7 @@ class DownstreamMLPTrainer(Trainer):
 
                 # update progress bar
                 bar.set_postfix(metrics)
-                if cur_step % 10 == 0:
+                if cur_step % 10 == 0 and _is_main_process():
                     mlflow.log_metrics(metrics, step=cur_step)
         return
 
