@@ -1,5 +1,9 @@
+import sys
+from pathlib import Path
 import torch
 import mlflow
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.utils.exp_utils.train_utils import load_cfg
 from src.utils.exp_utils.visual import feature_swapping_plot
