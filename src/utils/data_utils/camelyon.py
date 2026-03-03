@@ -39,13 +39,13 @@ def build_dataloader(
         samplers = {
             split: DistributedSampler(ds, drop_last=True)
             for split, ds in zip(
-                ["train", "valid", "test"],
-                [train_data, valid_data, test_data],
+                ["train", "valid"],
+                [train_data, valid_data],
             )
         }
         train_loader = _make_loader(train_data, False, samplers["train"])
         valid_loader = _make_loader(valid_data, False, samplers["valid"])
-        test_loader = _make_loader(test_data, False, samplers["test"])
+        test_loader = _make_loader(test_data, False)
 
     else:
         train_loader = _make_loader(train_data, True)
