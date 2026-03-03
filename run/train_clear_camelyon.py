@@ -20,7 +20,7 @@ from src.utils.exp_utils.train_utils import (
     build_first_stage_trainer,
     xavier_init,
 )
-from src.utils.exp_utils.dist_utils import setup_training, _is_main_process
+from src.utils.exp_utils.dist_utils import setup_training, is_main_process
 from src.utils.data_utils.camelyon import build_dataloader
 
 
@@ -85,7 +85,7 @@ def main():
     mlflow.set_tracking_uri(MLFLOW_URI)
     mlflow.set_experiment(experiment_name)
     with mlflow.start_run(run_name=run_name) as run:
-        if _is_main_process():
+        if is_main_process():
             print(f"Started MLflow run with ID: {run.info.run_id}")
         mlflow.log_params(cfg["vae"] | cfg["trainer_param"])
         trainer.fit(

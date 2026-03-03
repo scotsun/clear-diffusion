@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.sd_vae.ae import VAE
 from src.utils.exp_utils.downstream_utils import get_flatten_dim
 from src.utils.exp_utils.train_utils import load_cfg, build_cls_trainer
-from src.utils.exp_utils.dist_utils import setup_training, _is_main_process
+from src.utils.exp_utils.dist_utils import setup_training, is_main_process
 from src.utils.data_utils.camelyon import build_dataloader
 
 
@@ -102,7 +102,7 @@ def main():
     mlflow.set_tracking_uri(MLFLOW_URI)
     mlflow.set_experiment(experiment_name)
     with mlflow.start_run(run_name=run_name) as run:
-        if _is_main_process():
+        if is_main_process():
             print(f"Started MLflow run with ID: {run.info.run_id}")
         # train
         mlflow.log_params(cfg["cls_model"] | cfg["trainer_param"])
@@ -115,7 +115,7 @@ def main():
         test_acc, _, _ = trainer.evaluate(
             dataloader=dataloaders["test"], verbose=True, epoch_id=0
         )
-        if _is_main_process():
+        if is_main_process():
             mlflow.log_metric("test_acc", test_acc)
             print(f"Test Accuracy: {test_acc:.4f}")
 

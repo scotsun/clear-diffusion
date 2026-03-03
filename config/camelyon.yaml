@@ -26,7 +26,7 @@ trainer_param:
     use_dense: false
     use_proj: true
   gamma_c: 6000
-  gamma_s: 1500
+  gamma_s: 2000
   vae_lr: 0.0003
 vae:
   channel_multipliers:

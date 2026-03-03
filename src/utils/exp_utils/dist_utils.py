@@ -11,7 +11,7 @@ def _dist_is_initialized():
     return dist.is_available() and dist.is_initialized()
 
 
-def _is_main_process():
+def is_main_process():
     return not _dist_is_initialized() or dist.get_rank() == 0
 
 

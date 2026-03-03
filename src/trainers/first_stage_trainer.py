@@ -12,7 +12,7 @@ from mlflow.models import ModelSignature
 from src.sd_vae.ae import VAE
 from src.modules.loss import d_hinge_loss, g_hinge_loss
 from src.modules.loss import SupCon, SNN, DenseSupCon
-from src.utils.exp_utils.dist_utils import _is_main_process  # noqa
+from src.utils.exp_utils.dist_utils import is_main_process  # noqa
 from . import EarlyStopping, Trainer
 
 
@@ -126,7 +126,7 @@ class VAEFirstStageTrainer(Trainer):
 
                 # update progress bar
                 bar.set_postfix(metrics)
-                if cur_step % 50 == 0 and _is_main_process():
+                if cur_step % 50 == 0 and is_main_process():
                     mlflow.log_metrics(metrics, step=cur_step)
         return
 
@@ -301,7 +301,7 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
                 )
 
                 cur_step = epoch_id * len(dataloader) + batch_id
-                if cur_step % 50 == 0 and _is_main_process():
+                if cur_step % 50 == 0 and is_main_process():
                     mlflow.log_metrics(
                         {
                             "rec_loss": rec_loss.item(),

@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from mlflow.models import ModelSignature
 
 from src.utils.exp_utils.dist_utils import (
-    _is_main_process,
+    is_main_process,
     _get_module,
     _broadcast_bool,
     _broadcast_float,
@@ -61,7 +61,7 @@ class EarlyStopping:
         epoch: int,
         device: torch.device,
     ) -> tuple[bool, bool]:
-        if _is_main_process():
+        if is_main_process():
             improved = False
             if self.best_score is None or self._is_better(metric_val, self.best_score):
                 self.best_score = float(metric_val)
@@ -81,10 +81,10 @@ class EarlyStopping:
 
         improved = _broadcast_bool(improved, device)
         self.should_stop = _broadcast_bool(
-            self.should_stop if _is_main_process() else False, device=device
+            self.should_stop if is_main_process() else False, device=device
         )
 
-        if _is_main_process():
+        if is_main_process():
             score_to_bcast = (
                 float(self.best_score)
                 if self.best_score is not None
@@ -98,7 +98,7 @@ class EarlyStopping:
     def load_best_weights(self, model: nn.Module | DDP):
         # Ensure every rank gets the same best weights in DDP.
         if dist.is_available() and dist.is_initialized():
-            obj_list = [self.best_state_dict if _is_main_process() else None]
+            obj_list = [self.best_state_dict if is_main_process() else None]
             dist.broadcast_object_list(obj_list, src=0)
             self.best_state_dict = obj_list[0]
 
@@ -129,7 +129,7 @@ class Trainer(ABC):
         self.args = args
 
     def log_model(self, model_name: str = "best_model"):
-        if not _is_main_process():
+        if not is_main_process():
             return
         module = _get_module(self.model)
         mlflow.pytorch.log_model(
@@ -151,13 +151,13 @@ class Trainer(ABC):
             raise ValueError("EarlyStopping must be accompanied by valid data.")
 
         for epoch in range(epochs):
-            verbose = ((epoch % self.verbose_period) == 0) and _is_main_process()
+            verbose = ((epoch % self.verbose_period) == 0) and is_main_process()
             self._train(train_loader, verbose, epoch)
 
             if valid_loader is not None:
                 valid_metrics = self._valid(valid_loader, verbose, epoch)
 
-                if _is_main_process():
+                if is_main_process():
                     mlflow.log_metrics(valid_metrics["logged_metrics"], step=epoch)
                 if self.early_stopping is not None:
                     _, stop = self.early_stopping.step(
@@ -171,23 +171,23 @@ class Trainer(ABC):
             else:
                 stop = False
 
-            if _is_main_process() and (epoch % log_epoch_model_period) == 0:
+            if is_main_process() and (epoch % log_epoch_model_period) == 0:
                 self.log_model(model_name=f"epoch-{epoch}")
 
-            stop = _broadcast_bool(stop if _is_main_process() else False, self.device)
+            stop = _broadcast_bool(stop if is_main_process() else False, self.device)
 
             if stop:
                 if self.early_stopping is not None:
                     # load the best weight on every rank before saving the model
                     # to ensure the best model is saved and returned in the end
                     self.early_stopping.load_best_weights(self.model)
-                if _is_main_process():
+                if is_main_process():
                     self.log_model(model_name="best_model")
                 return
 
         if self.early_stopping is not None:
             self.early_stopping.load_best_weights(self.model)
-        if _is_main_process():
+        if is_main_process():
             self.log_model(model_name="best_model")
         return
 
