@@ -3,6 +3,7 @@ import torch
 import matplotlib.pyplot as plt
 
 from torchvision.utils import make_grid
+from sklearn.decomposition import PCA
 
 from src.sd_vae.ae import VAE
 
@@ -157,3 +158,29 @@ def interpolation_plot(
         plt.show()
 
         return
+
+
+def _latent_pca(latent: torch.Tensor):
+    # latent: (C, H, W)
+    C, H, W = latent.size()
+    latent = latent.view(C, -1).T  # (H*W, C)
+    pca = PCA(n_components=3)
+    rgb_pca = pca.fit_transform(latent.cpu().numpy())  # (H*W, 3)
+    rgb_pca = (rgb_pca - rgb_pca.min()) / (
+        rgb_pca.max() - rgb_pca.min()
+    )  # normalize to [0, 1]
+    rgb_pca = torch.from_numpy(rgb_pca).view(H, W, 3).permute(2, 0, 1)  # (3, H, W)
+    return rgb_pca
+
+
+def latent_pca_plot(latents: torch.Tensor, nrow=8):
+    # latents: (B, C, H, W)
+    pca_imgs = []
+    for i in range(latents.size(0)):
+        pca_imgs.append(_latent_pca(latents[i]))
+
+    pca_imgs = torch.stack(pca_imgs, dim=0)
+    pca_grid = make_grid(pca_imgs, nrow=nrow)
+    plt.imshow(pca_grid.permute(1, 2, 0).cpu().numpy())
+    plt.axis("off")
+    plt.show()
