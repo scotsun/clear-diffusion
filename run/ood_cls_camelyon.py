@@ -102,8 +102,6 @@ def main():
     mlflow.set_tracking_uri(MLFLOW_URI)
     mlflow.set_experiment(experiment_name)
     with mlflow.start_run(run_name=run_name) as run:
-        if is_main_process():
-            print(f"Started MLflow run with ID: {run.info.run_id}")
         # train
         mlflow.log_params(cfg["cls_model"] | cfg["trainer_param"])
         trainer.fit(
@@ -115,9 +113,11 @@ def main():
         test_acc, _, _ = trainer.evaluate(
             dataloader=dataloaders["test"], verbose=True, epoch_id=0
         )
+
         if is_main_process():
             mlflow.log_metric("test_acc", test_acc)
             print(f"Test Accuracy: {test_acc:.4f}")
+            print(f"Ended MLflow run with ID: {run.info.run_id}")
 
     # end
     if is_distributed:

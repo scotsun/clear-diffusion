@@ -85,14 +85,14 @@ def main():
     mlflow.set_tracking_uri(MLFLOW_URI)
     mlflow.set_experiment(experiment_name)
     with mlflow.start_run(run_name=run_name) as run:
-        if is_main_process():
-            print(f"Started MLflow run with ID: {run.info.run_id}")
         mlflow.log_params(cfg["vae"] | cfg["trainer_param"])
         trainer.fit(
             epochs=cfg["train"]["epochs"],
             train_loader=dataloaders["train"],
             valid_loader=dataloaders["valid"],
         )
+        if is_main_process():
+            print(f"Ended MLflow run with ID: {run.info.run_id}")
 
     # end
     if is_distributed:
