@@ -178,6 +178,143 @@ class DenseSupCon(nn.Module):
         return loss
 
 
+class PathologyPerceptualLoss(nn.Module):
+    """
+    LPIPS-style perceptual loss for pathology images using PLIP (ViT-B/32).
+
+    Extracts intermediate ViT block features from the PLIP vision encoder
+    and computes normalized L2 distances across selected layers.
+
+    Usage:
+        loss_fn = PathologyPerceptualLoss(device=device)
+        loss = loss_fn(img1, img2)  # img1, img2: [B, 3, H, W] in [0, 1]
+    """
+
+    PLIP_HF_ID = "vinid/plip"
+
+    # ViT-B/32 has 12 transformer blocks (0–11); pick 4 evenly spaced ones
+    FEATURE_LAYERS = [2, 5, 8, 11]
+
+    def __init__(
+        self,
+        device: torch.device,
+        hf_model_id: str = PLIP_HF_ID,
+        cache_dir: str | None = None,
+    ):
+        super().__init__()
+
+        # ── Load PLIP from HuggingFace ──────────────────────────────────────
+        model = CLIPModel.from_pretrained(hf_model_id, cache_dir=cache_dir)
+        vision_model = model.vision_model
+
+        # ── Decompose ViT into addressable stages ───────────────────────────
+        self.embeddings = vision_model.embeddings
+
+        # Defensive: HuggingFace CLIP has a typo in some versions ('pre_layrnorm')
+        self.pre_layernorm = getattr(
+            vision_model,
+            "pre_layrnorm",
+            getattr(vision_model, "pre_layernorm", nn.Identity()),
+        )
+
+        encoder_layers = vision_model.encoder.layers  # ModuleList of 12 blocks
+        self.post_layernorm = vision_model.post_layernorm
+
+        # Register only the blocks up to the deepest required layer
+        self.feature_blocks = nn.ModuleList(
+            [encoder_layers[i] for i in range(max(self.FEATURE_LAYERS) + 1)]
+        )
+        self.feature_layer_ids = set(self.FEATURE_LAYERS)
+
+        # Freeze all parameters — fixed feature extractor
+        for p in self.parameters():
+            p.requires_grad = False
+
+        # ── PLIP / OpenAI CLIP normalization constants ───────────────────────
+        self.register_buffer(
+            "mean",
+            torch.tensor([0.48145466, 0.4578275, 0.40821073]).view(1, 3, 1, 1),
+        )
+        self.register_buffer(
+            "std",
+            torch.tensor([0.26862954, 0.26130258, 0.27577711]).view(1, 3, 1, 1),
+        )
+
+        self.to(device)
+        self.eval()
+        print(f"PathologyPerceptualLoss: loaded PLIP from '{hf_model_id}'")
+
+    # ── Preprocessing ────────────────────────────────────────────────────────
+
+    def _preprocess(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Resize to 224x224 (ViT-B/32 native input), clamp, and normalize
+        to CLIP pixel space.
+        """
+        if x.shape[-2] != 224 or x.shape[-1] != 224:
+            x = F.interpolate(x, size=(224, 224), mode="bicubic", align_corners=False)
+            x = torch.clamp(x, 0.0, 1.0)
+        return (x - self.mean) / self.std
+
+    # ── Feature extraction ───────────────────────────────────────────────────
+
+    def _extract_features(self, x: torch.Tensor) -> list[torch.Tensor]:
+        """
+        Run the PLIP ViT encoder up to the deepest required layer,
+        collecting hidden states at FEATURE_LAYERS.
+
+        Returns a list of [B, num_patches, C] tensors (CLS token excluded).
+        """
+        hidden = self.embeddings(x)
+        hidden = self.pre_layernorm(hidden)
+
+        features = []
+        for idx, block in enumerate(self.feature_blocks):
+            # Defensive: some HF versions return a tuple, others return a tensor
+            out = block(hidden, attention_mask=None, causal_attention_mask=None)
+            hidden = out[0] if isinstance(out, (tuple, list)) else out
+
+            if idx in self.feature_layer_ids:
+                # Drop CLS token; keep spatial patch tokens → [B, N, C]
+                features.append(hidden[:, 1:, :])
+
+        return features
+
+    # ── Channel-wise L2 normalization (LPIPS-style) ──────────────────────────
+
+    @staticmethod
+    def _channel_norm(f: torch.Tensor) -> torch.Tensor:
+        """
+        L2-normalize along the channel (feature) dimension.
+        f: [B, N, C]  →  output: [B, N, C]
+        """
+        return f / f.norm(p=2, dim=-1, keepdim=True).clamp(min=1e-8)
+
+    # ── Forward ──────────────────────────────────────────────────────────────
+
+    def forward(self, img1: torch.Tensor, img2: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            img1, img2 : [B, 3, H, W] float tensors in [0, 1]
+        Returns:
+            Scalar tensor — mean perceptual distance (↓ = more similar)
+        """
+        x1 = self._preprocess(img1)
+        x2 = self._preprocess(img2)
+
+        feats1 = self._extract_features(x1)
+        feats2 = self._extract_features(x2)
+
+        loss = sum(
+            ((self._channel_norm(f1) - self._channel_norm(f2)) ** 2)
+            .mean(dim=[1, 2])  # mean over patches and channels → [B]
+            .mean()            # mean over batch → scalar
+            for f1, f2 in zip(feats1, feats2)
+        )
+        return loss
+
+
+
 if __name__ == "__main__":
     supcon = SupCon(temperature=0.5, learnable_temp=True)
     print(list(supcon.parameters()))

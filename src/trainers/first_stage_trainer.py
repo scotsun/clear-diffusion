@@ -383,6 +383,11 @@ class CLEAR_VAEFirstStageTrainer(Trainer):
 
 
 class CLEAR_VAEFirstStageTrainerV2(CLEAR_VAEFirstStageTrainer):
+    """
+    V2: adds a configurable perceptual reconstruction loss (MSE or PL via PLIP).
+    Everything else (contrastive, opts, _valid) is inherited from V1.
+    """
+
     def __init__(
         self,
         model: nn.Module,
@@ -400,13 +405,162 @@ class CLEAR_VAEFirstStageTrainerV2(CLEAR_VAEFirstStageTrainer):
             model_signature,
             args,
         )
-        # TODO: add perception reconstruction
+        self._configure_rec_criterion(args)
+
+    # ── Rec criterion ────────────────────────────────────────────────────────
+
+    def _configure_rec_criterion(self, args: dict):
+        self.rec_loss_type = args.get("rec_loss_type", "mse")
+        self.rec_weight = args.get("rec_weight", 1.0)
+
+        if self.rec_loss_type == "pl":
+            self.pl_loss_fn = PathologyPerceptualLoss(
+                device=self.device,
+                hf_model_id=args.get("plip_model_id", PathologyPerceptualLoss.PLIP_HF_ID),
+                cache_dir=args.get("plip_cache_dir"),
+            )
+        elif self.rec_loss_type != "mse":
+            raise ValueError(f"Unknown rec_loss_type: '{self.rec_loss_type}'. Choose 'mse' or 'pl'.")
+
+    def compute_rec_loss(self, xhat: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+        if self.rec_loss_type == "mse":
+            return F.mse_loss(xhat, x, reduction="none").sum(dim=(1, 2, 3)).mean()
+        elif self.rec_loss_type == "pl":
+            return self.pl_loss_fn(x, xhat).mean()
+        return torch.tensor(0.0, device=self.device)
+
+    # ── Train ────────────────────────────────────────────────────────────────
 
     def _train(self, dataloader: DataLoader, verbose: bool, epoch_id: int):
-        pass
+        vae: VAE = self.model
+        vae.train()
+        opt = self.opts["vae_opt"]
+        device = self.device
 
-    def evaluate(self, dataloader, verbose):
-        pass
+        channel_split = self.args["channel_split"]
+        beta = self.args["beta"]
+        gamma_c, gamma_s = self.args["gamma_c"], self.args["gamma_s"]
 
-    def _valid(self, dataloader, verbose, epoch_id):
-        pass
+        with tqdm(dataloader, unit="batch", mininterval=0, disable=not verbose) as bar:
+            bar.set_description(f"Epoch {epoch_id}")
+            for batch_id, batch in enumerate(bar):
+                x, y = batch["image"].to(device), batch["label"].to(device)
+                opt.zero_grad()
+
+                xhat, posterior = vae(x)
+                z_c, z_s = posterior.sample().split_with_sizes(channel_split, dim=1)
+
+                raw_rec_loss = self.compute_rec_loss(xhat, x)
+                rec_loss = raw_rec_loss * self.rec_weight
+
+                kl_loss = posterior.kl().mean()
+                con_loss = self.contrastive_criterions["global"]["content"](
+                    z_c, y
+                ).mean()
+                ps_loss = self.contrastive_criterions["global"]["style"](
+                    z_s, y, ps=True
+                ).mean()
+
+                if "dense" in self.contrastive_criterions:
+                    dense_con_loss = self.contrastive_criterions["dense"]["content"](
+                        z_c, y
+                    ).mean()
+                    dense_ps_loss = self.contrastive_criterions["dense"]["style"](
+                        z_s, y, ps=True
+                    ).mean()
+                    loss = (
+                        rec_loss
+                        + beta * kl_loss
+                        + gamma_c * (0.5 * con_loss + 0.5 * dense_con_loss)
+                        + gamma_s * (0.5 * ps_loss + 0.5 * dense_ps_loss)
+                    )
+                else:
+                    dense_con_loss = torch.tensor(0.0, device=device)
+                    dense_ps_loss = torch.tensor(0.0, device=device)
+                    loss = (
+                        rec_loss
+                        + beta * kl_loss
+                        + gamma_c * con_loss
+                        + gamma_s * ps_loss
+                    )
+
+                loss.backward()
+                opt.step()
+
+                bar.set_postfix(
+                    rec_loss=rec_loss.item(),
+                    kl_loss=kl_loss.item(),
+                    con_loss=con_loss.item(),
+                    ps_loss=ps_loss.item(),
+                    dense_con_loss=dense_con_loss.item(),
+                    dense_ps_loss=dense_ps_loss.item(),
+                )
+
+                cur_step = epoch_id * len(dataloader) + batch_id
+                if cur_step % 50 == 0:
+                    mlflow.log_metrics(
+                        {
+                            "rec_loss": rec_loss.item(),
+                            "raw_rec_loss": raw_rec_loss.item(),
+                            "kl_loss": kl_loss.item(),
+                            "con_loss": con_loss.item(),
+                            "ps_loss": ps_loss.item(),
+                            "dense_con_loss": dense_con_loss.item(),
+                            "dense_ps_loss": dense_ps_loss.item(),
+                        },
+                        step=cur_step,
+                    )
+        return
+
+    # ── Evaluate ─────────────────────────────────────────────────────────────
+
+    @torch.no_grad()
+    def evaluate(self, dataloader: DataLoader, verbose: bool):
+        vae: VAE = self.model
+        vae.eval()
+        device = self.device
+        channel_split = self.args["channel_split"]
+
+        losses = {
+            "rec_loss": 0.0,
+            "kl_loss": 0.0,
+            "con_loss": 0.0,
+            "ps_loss": 0.0,
+            "dense_con_loss": 0.0,
+            "dense_ps_loss": 0.0,
+        }
+        with tqdm(dataloader, unit="batch", mininterval=0, disable=not verbose) as bar:
+            for batch in bar:
+                x, y = batch["image"].to(device), batch["label"].to(device)
+                with autocast(device_type="cuda", dtype=torch.float16):
+                    xhat, posterior = vae(x)
+                    z_c, z_s = posterior.sample().split_with_sizes(channel_split, dim=1)
+
+                    rec_loss = self.compute_rec_loss(xhat, x) * self.rec_weight
+                    kl_loss = posterior.kl().mean()
+                    con_loss = self.contrastive_criterions["global"]["content"](
+                        z_c, y
+                    ).mean()
+                    ps_loss = self.contrastive_criterions["global"]["style"](
+                        z_s, y, ps=True
+                    ).mean()
+
+                losses["rec_loss"] += rec_loss.item()
+                losses["kl_loss"] += kl_loss.item()
+                losses["con_loss"] += con_loss.item()
+                losses["ps_loss"] += ps_loss.item()
+
+                if "dense" in self.contrastive_criterions:
+                    dense_con_loss = self.contrastive_criterions["dense"]["content"](
+                        z_c, y
+                    ).mean()
+                    dense_ps_loss = self.contrastive_criterions["dense"]["style"](
+                        z_s, y, ps=True
+                    ).mean()
+                    losses["dense_con_loss"] += dense_con_loss.item()
+                    losses["dense_ps_loss"] += dense_ps_loss.item()
+
+        for k in losses:
+            losses[k] /= len(dataloader)
+
+        return losses
