@@ -1,0 +1,76 @@
+mlflow:
+  experiment_name: clear-camelyon-ldm
+  run_name:        ldm_v1
+
+data:
+  batch_size:  32
+  data_root:   /hpc/group/engelhardlab/ms1008/image_data
+  img_size:    96
+  name:        camelyon
+
+out_dir: ./out/camelyon_ldm
+
+train:
+  early_stopping_patience: 10
+  early_stopping_mode:     min
+  epochs:                  50
+
+vae:
+  run_id:       "c0e92354d4db4dec82e0887abda4e751"
+  artifact:     best_model
+  tracking_uri: mlruns
+
+trainer_param:
+  lr:            1.0e-5
+  num_classes:   2                        # camelyon: normal vs tumor
+  channel_split:
+    - 4                                   # z_c: 4ch (must match VAE trainer_param)
+    - 8                                   # z_s: 8ch
+  p_uncond:      0.1
+  num_epochs:    100
+  verbose_period: 1
+
+scheduler_param:
+  num_timesteps: 1000
+  beta_start:    1.0e-4
+  beta_end:      0.02
+
+model_config:
+  im_channels:       4                    # = channel_split[0]
+  down_channels:
+    - 64
+    - 128
+    - 256
+    - 512
+  mid_channels:
+    - 512
+    - 512
+    - 256
+  time_emb_dim:      512
+  down_sample:
+    - true
+    - true
+    - false
+  attn_down:
+    - false
+    - true
+    - true
+  num_down_layers:   2
+  num_mid_layers:    1
+  num_up_layers:     2
+  norm_channels:     32
+  num_heads:         8
+  conv_out_channels: 64
+  condition_config:
+    condition_types:
+      - class
+    class_condition_config:
+      num_classes: 2
+
+sample_param:
+  latent_shape:
+    - 4                                   # = channel_split[0]
+    - 12                                  # 96 / 8 (VAE scale factor)
+    - 12
+  guidance_scale: 1.75
+  n_samples:      16
